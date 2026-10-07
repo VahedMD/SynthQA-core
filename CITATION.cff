@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: "synthqa-core: millisecond-cost physics surrogates for synthetic CT QA in proton therapy"
+message: >
+  If you use this software, please cite it as below, together with the
+  SynthRAD2025 and DoseRAD2026 dataset publications.
+type: software
+authors:
+  - family-names: Moharramzadeh
+    given-names: Vahed
+repository-code: https://github.com/VahedMD/SynthQA-core
+license: MIT
+version: 0.1.0
+date-released: 2026-10-07
+keywords:
+  - proton therapy
+  - synthetic CT
+  - quality assurance
+  - WEPL
+  - stopping power ratio
+  - medical physics
