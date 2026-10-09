@@ -1,102 +1,56 @@
 # API Reference
 
 ## Coordinate conventions (read first)
+- SimpleITK arrays: NumPy **(Z, Y, X)**; spacing/origin: **(X, Y, Z)**. Loaders label these
+  explicitly (`shape_zyx`, `spacing_xyz`) — never mix them.
+- `axis` / `beam_axis`: NumPy convention `0 = Z (SI)`, `1 = Y (AP)`, `2 = X (LR)`.
+- DoseRAD2026 dose grids are anisotropic: 1 × 1 × 3 mm³.
+- **Sample-count rule:** any 1-D ray analysis must use the same `num_samples` for the dose
+  profile and the WEPL profile (default of `compute_wepl_along_ray` is 500; benchmarks use
+  2000). Mismatches raise NumPy broadcasting errors.
 
-- SimpleITK arrays are returned as **NumPy (Z, Y, X)**; spacing/origin are **(X, Y, Z)**.
-  Every loader labels these explicitly (`shape_zyx`, `spacing_xyz`) — never mix them.
-- `axis` / `beam_axis` arguments use NumPy convention: `0 = Z (SI)`, `1 = Y (AP)`, `2 = X (LR)`.
-- DoseRAD2026 dose grids are anisotropic: 1 × 1 × 3 mm³. Pass the spacing of the beam axis.
+## Implemented modules
 
----
+### `synthqa_core.io.image_loader`
+`load_mha(file_path) -> dict` with keys `array (Z,Y,X)`, `spacing_xyz`, `origin_xyz`,
+`direction` (3×3 flat), `shape_zyx`.
 
-## `synthqa_core.io.image_loader`
+### `synthqa_core.calibration`
+- `DOSERAD_HU_DENSITY_CURVE`; `HUToDensityConverter(curve_data=None).convert(hu)` → g/cm³,
+  clipped to [−1024, 4000] HU.
+- `DensityToSPRConverter(method="linear_approx").convert(density)` → SPR ≈ ρ_rel.
+- `CalibrationProfile(name)` / `.from_json(path)`; attributes `hu_to_density`,
+  `density_to_spr`.
 
-```python
-load_mha(file_path: str) -> dict
-```
-Returns `{"array" (Z,Y,X), "spacing_xyz", "origin_xyz", "direction" (3×3 flat), "shape_zyx"}`.
+### `synthqa_core.surrogates`
+- `compute_wepl_along_axis(spr_array, spacing_xyz, axis)` → cumulative WEPL (mm), cumsum.
+- `compute_wepl_along_ray(spr_array, spacing_xyz, origin_xyz, ray_source, ray_target,
+  num_samples=500)` → 1-D cumulative WEPL (mm); trilinear sampling; out-of-grid SPR = 0.
+- `compute_spr_error(spr_ref, spr_sct)` → ΔSPR; `compute_delta_wepl_along_axis(...)`.
 
-## `synthqa_core.calibration.hu_to_density`
+### `synthqa_core.risk`
+- `compute_gradient_weighted_risk(delta_wepl, mc_dose, beam_axis, spacing)` → Gy·mm.
+- `find_distal_edge(dose_profile, wepl_profile, threshold_percent=80)` → (edge, max_dose),
+  sub-voxel linear interpolation. (`scripts/` define a thin `find_r80` wrapper on depth.)
+- `predict_range_shift(wepl_ref, wepl_sct)`; `classify_risk(delta_wepl, dose_gradient,
+  gradient_threshold=0.1)` → int8 classes 0/1/2.
 
-```python
-DOSERAD_HU_DENSITY_CURVE          # 10-point DoseRAD2026 Appendix B curve
-HUToDensityConverter(curve_data=None)
-    .convert(hu) -> np.ndarray    # g/cm³, clipped to [-1024, 4000] HU
-```
-
-## `synthqa_core.calibration.density_to_spr`
-
-```python
-DensityToSPRConverter(method="linear_approx")
-    .convert(density) -> np.ndarray   # SPR ≈ ρ_rel (water = 1)
-```
-`method="schneider"` reserved for the stoichiometric profile (NotImplementedError).
-
-## `synthqa_core.calibration.profiles`
-
-```python
-CalibrationProfile(profile_name="doserad2026_default")
-    .hu_to_density : HUToDensityConverter
-    .density_to_spr: DensityToSPRConverter
-CalibrationProfile.from_json(path)  # keys: "name", "hu_to_density_curve", "density_to_spr_method"
-```
-
-## `synthqa_core.surrogates.wepl`
-
-```python
-compute_wepl_along_axis(spr_array, spacing_xyz, axis) -> np.ndarray
-    # cumulative WEPL (mm) via cumsum; beam enters at index 0
-
-compute_wepl_along_ray(spr_array, spacing_xyz, origin_xyz,
-                       ray_source, ray_target, num_samples=500) -> np.ndarray
-    # 1-D cumulative WEPL (mm) along an arbitrary physical ray; trilinear sampling,
-    # out-of-bounds SPR = 0
-```
-
-## `synthqa_core.surrogates.spr_error`
-
-```python
-compute_spr_error(spr_ref, spr_sct) -> np.ndarray            # ΔSPR = SPR_sCT − SPR_ref
-compute_delta_wepl_along_axis(delta_spr, spacing_xyz, axis)  # accumulated ΔWEPL (mm)
-```
-
-## `synthqa_core.risk.gradient_weighted`
-
-```python
-compute_gradient_weighted_risk(delta_wepl, mc_dose, beam_axis, spacing) -> np.ndarray
-    # Risk = |ΔWEPL| × |∂D/(beam axis)|   (units Gy·mm)
-```
-
-## `synthqa_core.risk.range_shift`
-
-```python
-find_distal_edge(dose_profile, wepl_profile, threshold_percent=80.0) -> (edge, max_dose)
-    # R80/R90 along a 1-D profile with sub-voxel linear interpolation
-predict_range_shift(wepl_ref, wepl_sct) -> float              # ΔR (mm)
-```
-
-## `synthqa_core.risk.thresholds`
-
-```python
-classify_risk(delta_wepl, dose_gradient, gradient_threshold=0.1) -> np.ndarray[int8]
-    # 0 low / 1 medium (1–3 mm) / 2 high (≥3 mm), gated on |∇D| ≥ threshold
-```
-
----
+### Planned (not yet implemented)
+`io.plan_parser`, `io.dose_loader`, `io.dataset_manifest`, `metrics.gamma_index`,
+`metrics.dose_difference`, `metrics.range_metrics`, `visualization.*`.
 
 ## Scripts
 
-| Script | Purpose | Example |
+| Script | Purpose | Key outputs |
 |---|---|---|
-| `run_proton_qa.py` | CLI QA on real data | `python scripts/run_proton_qa.py --ct ct.mha --dose dose.mha [--sct sct.mha]` |
-| `synthetic_benchmark.py` | self-contained validation + timing | `python scripts/synthetic_benchmark.py` |
-| `generate_figures.py` | manuscript Figures 1–4 | `python scripts/generate_figures.py` |
+| `run_proton_qa.py` | CLI QA on local triplet | risk map, classes, timing |
+| `synthetic_benchmark.py` | phantom end-to-end | r, timing, Fig console summary |
+| `generate_figures.py` | manuscript Figs 1–4 | `figures/Fig1–4*.png` |
+| `benchmark_dataset.py` | stratified real-data benchmark; `MODE = "uniform" \| "bone_only"` | Figs 6–7, stratified table |
+| `benchmark_pyradplan.py` | head-to-head vs pyRadPlan (needs `pyRadPlan==0.3.5`) | Fig 8, Table 4 |
+| `reviewer_stats.py` | bootstrap CIs, Bland–Altman, subgroups, cohort expansion | Figs 9–11, stats console |
 
 ## Testing
-
-```bash
-pytest tests/ -v
-```
-Unit tests cover axis-ordering of the loader, water equivalence of the calibration
-(HU 0 → ≈1.006 g/cm³), axis-aligned and arbitrary-ray WEPL on analytic phantoms,
-gradient-weighted risk behavior, R80 recovery, and threshold gating.
+`pytest tests/ -v` — covers loader axis ordering, water equivalence (HU 0 → ≈1.006 g/cm³),
+axis-aligned and arbitrary-ray WEPL on analytic phantoms, gradient-weighted risk behavior,
+R80 recovery, threshold gating.
