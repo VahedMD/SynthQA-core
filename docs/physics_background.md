@@ -53,34 +53,36 @@ The range-relevant quantity is the *difference* between sCT and reference CT:
 
 At the distal edge, ΔWEPL is the **predicted range shift** ΔR (first order).
 
+
 ## 5. Gradient-weighted risk (the core surrogate)
 
 Assume the sCT dose is a depth-shifted version of the reference dose,
-`D_sCT(z) ≈ D_ref(z − ΔWEPL)`. A first-order Taylor expansion gives
+`D_sCT(z) ≈ D_ref(z − ΔR)`. A first-order Taylor expansion gives
 
 ```
 ΔD(z) ≈ −(∂D_ref/∂z) · ΔWEPL   ⇒   |ΔD| ≈ |∂D_ref/∂z| · |ΔWEPL| = Risk
 ```
 
-Consequences that make the map clinically meaningful:
+### 5.1 Sign convention and dose reconstruction
 
-- **Entrance channel silence.** There, |∂D/∂z| is small, so even large |ΔWEPL| yields
-  negligible risk — correct, because a range shift on a flat plateau changes dose little.
-- **Distal edge localization.** The fall-off has the largest gradient in a proton plan,
-  so risk concentrates exactly where range errors matter.
-- **Lateral selectivity.** Rays that never traverse the erroneous anatomy have
-  ΔWEPL = 0 and zero risk, even where their own distal gradient is steep.
+With `ΔWEPL = WEPL_sCT − WEPL_ref`:
+- ΔWEPL > 0 (sCT overestimates SPR) ⇒ protons stop earlier ⇒ **proximal** shift;
+  predicted depth shift = −ΔWEPL at the Bragg peak.
+- The perturbed depth–dose profile is reconstructed from the reference profile by
+  re-sampling in WEPL space:
+  `D_sCT(z) = D_ref evaluated at (WEPL_ref(z) + ΔWEPL(z))`,
+  i.e. `np.interp(WEPL_ref + ΔWEPL, WEPL_ref, D_ref)`. (Using `−ΔWEPL` here mirrors the
+  shift and is a common sign bug.)
 
-### Assumptions and limitations
+### 5.2 Validity regime (the "Taylor breakdown")
 
-1. **First-order linearization.** When |ΔWEPL| becomes a substantial fraction of the
-   fall-off width (σ), curvature breaks the approximation (visible as heteroscedastic
-   scatter at the high end of the risk–error correlation plot). The R80 range-shift
-   metric is provided as an exact companion at the edge.
-2. **Single dominant beam direction** per risk map; the gradient is taken along the ray.
-   For multi-field plans, compute per-beam maps and combine (e.g., max).
-3. **Density-only physics.** Nuclear interaction and LET changes from composition errors
-   are ignored (acceptable at the few-percent level for sCT QA).
+The voxel-wise identity |ΔD| ≈ Risk requires |ΔWEPL| ≲ fall-off width. For single proton
+beamlets the fall-off is only ~3–4 mm wide; a uniform +50 HU bias produces 8–12 mm shifts,
+where Risk (bell-shaped in the gradient) and |ΔD| (step-shaped) decorrelate. Consequences:
+- **Voxel-wise gated correlation** is meaningful only in the small-error regime
+  (e.g., localized bone errors of 1–4 mm).
+- **The R80 range-shift metric is exact for arbitrary shift magnitudes** and is therefore
+  the primary validation endpoint; voxel-wise correlation is reported as secondary.
 
 ## 6. Risk classification
 
@@ -90,19 +92,40 @@ Consequences that make the map clinically meaningful:
 | 1 Medium | 1 mm ≤ \|ΔWEPL\| < 3 mm **and** high gradient |
 | 2 High | \|ΔWEPL\| ≥ 3 mm **and** high gradient |
 
-The 1/3 mm bands are chosen against typical clinical range margins
-(~3.5 %·R + 1–3 mm): a ≥3 mm localized error can consume a full margin.
+Bands are chosen against typical clinical range margins (~3.5 %·R + 1–3 mm).
 
 ## 7. Validation methodology
 
-Because MC doses on perturbed sCTs are not available, ground truth dose error is
-obtained by re-evaluating the (analytical or pencil-beam) dose on the perturbed SPR map.
-Metrics: Pearson *r* and R² between `Risk` and |ΔD| over voxels with dose > 5 % of max;
-R80 shifts per ray; sensitivity/specificity of the risk classes for flagging > 2 % dose
-errors; wall-clock time per volume (target < 10 ms).
+Endpoint hierarchy:
+1. **Range shift (primary):** predicted −ΔWEPL at the peak vs (a) R80 shift of the
+   WEPL-reconstructed dose on the MC profile, and (b) R80 shift between two full
+   pyRadPlan Hong pencil-beam calculations (reference CT vs perturbed sCT).
+2. **Voxel-wise gated correlation (secondary):** Pearson r between Risk and |ΔD| over
+   voxels with |∇D| > 10 % of max (distal edge only).
+3. **Specificity controls:** rays with zero perturbed-bone path must yield ≈ 0 mm shift.
+
+Statistical robustness:
+- **Bootstrap 95 % CIs** (10,000 resamples) for MAE, bias, and r.
+- **Bland–Altman** limits of agreement for surrogate-vs-PB.
+- **Mann–Whitney U** subgroup tests (metal vs clean; thorax vs abdomen) with a
+  pre-specified sensitivity analysis excluding boundary-crossing outliers.
+- **Cohort expansion:** surrogate-vs-MC correlation on an independent random patient
+  subset (n = 17) beyond the stratified cohort.
+
+Final numbers (see README table): cohort expansion r = 0.983 (0.955–0.996),
+MAE 0.333 mm; PB head-to-head MAE 0.367 mm, LoA [−2.13, +1.65] mm
+(excl. outlier [−0.26, +0.36] mm); speedup ≈ 8,900× vs PB.
+
+## 8. Gamma and dose-difference metrics
+
+Gamma uses **global** normalization (dose criterion as fraction of reference maximum),
+evaluation restricted to voxels ≥ 10 % of reference max, and a shifted-array search within
+the distance criterion (no interpolation of the reference). Default criteria 3 %/3 mm and
+2 %/2 mm. Dose differences are reported absolute (Gy), relative-global (% of max), and
+relative-local (% of local reference, masked where reference ≈ 0).
 
 
-## 8. One-dimensional ray-tracing validation framework
+## 9. One-dimensional ray-tracing validation framework
 DoseRAD2026 beams use 36 arbitrary gantry angles, so 3-D axis-aligned gradients are
 invalid. Validation therefore extracts 1-D physical profiles:
 - dose profile: trilinear sampling (`scipy.ndimage.map_coordinates`, order 1) of the 3-D
@@ -115,7 +138,7 @@ invalid. Validation therefore extracts 1-D physical profiles:
 - proximal-bone accounting: bone path length is counted only **up to the Bragg peak**;
   bone distal to the peak cannot affect range and must not be counted.
 
-## 9. Sign conventions and the shift model
+## 10. Sign conventions and the shift model
 With ΔWEPL = WEPL_sCT − WEPL_ref, the perturbed depth–dose is
 `D_sCT(z) = D_ref` evaluated at WEPL `W(z) + ΔWEPL(z)` (i.e. `np.interp(W + ΔW, W, D_ref)`):
 higher SPR stops protons earlier (proximal shift, negative depth shift), lower SPR
@@ -123,7 +146,7 @@ penetrates deeper (distal shift, positive depth shift). The predicted depth shif
 `−ΔWEPL` at the reference peak. Using `W − ΔW` inverts the physics and can push the
 shifted peak outside the sampled ray (a common source of spurious `nan` R80 values).
 
-## 10. Validity regime: the Taylor breakdown
+## 11. Validity regime: the Taylor breakdown
 Risk = |ΔWEPL|·|∇D| is a first-order expansion, valid while |ΔWEPL| is small compared with
 the distal fall-off width. For single beamlets (fall-off ≈ 3–4 mm) and large global errors
 (e.g. +50 HU ⇒ ≈10 mm shift), the voxel-wise error becomes a step function while Risk is a
@@ -137,14 +160,14 @@ endpoint remains exact**. Consequently:
   recalculation, not a millimetre-equivalent substitute (case 1THB002: surrogate 0.58 mm,
   MC 2.22 mm, PB 3.70 mm).
 
-## 11. sCT error models
+## 12. sCT error models
 - **Uniform bias (+50 HU):** global systematic error; maximizes ΔWEPL variance; used for
   the range-shift and head-to-head arms.
 - **Bone-only (−200 HU for HU > 300):** representative deep-learning failure (cortical bone
   underestimation on MRI); localized ΔWEPL; produces natural negative controls (rays that
   miss bone ⇒ zero shift), enabling sensitivity/specificity analysis.
 
-## 12. Statistical methodology
+## 13. Statistical methodology
 - Bootstrap 95% CIs (10,000 resamples) for MAE, bias, Pearson r, and speedup.
 - Bland–Altman bias and 95% limits of agreement for surrogate vs pencil beam; reported
   with and without the single boundary-crossing case.
@@ -154,8 +177,14 @@ endpoint remains exact**. Consequently:
 - Pearson r is scale-invariant, so per-beamlet (mGy) dose normalization does not affect
   correlation; absolute errors are reported as % of beamlet D_peak or as mm range shift.
 
-## Limitations (carried into the manuscript)
-First-order model; central-axis 1-D endpoint; density-only physics (no nuclear/LET);
-per-beam maps require a combination rule for multi-field plans; single-institution
-imaging; training-set-only validation (test embargo); 300 HU bone threshold heuristic;
-analytical shift ground truth in the expansion arm; hardware-dependent timings.
+
+## 14. Limitations
+1. First-order linearization (see §5.2).
+2. 1-D ray model: lateral scatter and range mixing at heterogeneity boundaries are not
+   captured (the 1THB002-type surrogate-vs-PB divergence); the surrogate is a lower-bound
+   trigger in such cases.
+3. Density-only physics: composition/LET and nuclear-interaction changes ignored.
+4. Single dominant beam direction per risk map; multi-field plans combine per-beam maps.
+
+
+

@@ -1,56 +1,102 @@
 # API Reference
 
 ## Coordinate conventions (read first)
-- SimpleITK arrays: NumPy **(Z, Y, X)**; spacing/origin: **(X, Y, Z)**. Loaders label these
-  explicitly (`shape_zyx`, `spacing_xyz`) — never mix them.
-- `axis` / `beam_axis`: NumPy convention `0 = Z (SI)`, `1 = Y (AP)`, `2 = X (LR)`.
-- DoseRAD2026 dose grids are anisotropic: 1 × 1 × 3 mm³.
-- **Sample-count rule:** any 1-D ray analysis must use the same `num_samples` for the dose
-  profile and the WEPL profile (default of `compute_wepl_along_ray` is 500; benchmarks use
-  2000). Mismatches raise NumPy broadcasting errors.
 
-## Implemented modules
+- SimpleITK arrays are **NumPy (Z, Y, X)**; spacing/origin are **(X, Y, Z)**.
+- `axis` / `beam_axis`: `0 = Z (SI)`, `1 = Y (AP)`, `2 = X (LR)`.
+- **Sign convention:** ΔWEPL > 0 ⇒ proximal shift; predicted depth shift = −ΔWEPL(peak).
+- DoseRAD2026 proton dose grid: 1 × 1 × 3 mm³ (anisotropic).
 
-### `synthqa_core.io.image_loader`
-`load_mha(file_path) -> dict` with keys `array (Z,Y,X)`, `spacing_xyz`, `origin_xyz`,
-`direction` (3×3 flat), `shape_zyx`.
+*(io, calibration, surrogates, risk sections unchanged from v0.1.)*
 
-### `synthqa_core.calibration`
-- `DOSERAD_HU_DENSITY_CURVE`; `HUToDensityConverter(curve_data=None).convert(hu)` → g/cm³,
-  clipped to [−1024, 4000] HU.
-- `DensityToSPRConverter(method="linear_approx").convert(density)` → SPR ≈ ρ_rel.
-- `CalibrationProfile(name)` / `.from_json(path)`; attributes `hu_to_density`,
-  `density_to_spr`.
+---
 
-### `synthqa_core.surrogates`
-- `compute_wepl_along_axis(spr_array, spacing_xyz, axis)` → cumulative WEPL (mm), cumsum.
-- `compute_wepl_along_ray(spr_array, spacing_xyz, origin_xyz, ray_source, ray_target,
-  num_samples=500)` → 1-D cumulative WEPL (mm); trilinear sampling; out-of-grid SPR = 0.
-- `compute_spr_error(spr_ref, spr_sct)` → ΔSPR; `compute_delta_wepl_along_axis(...)`.
+## `synthqa_core.metrics.gamma_index`
 
-### `synthqa_core.risk`
-- `compute_gradient_weighted_risk(delta_wepl, mc_dose, beam_axis, spacing)` → Gy·mm.
-- `find_distal_edge(dose_profile, wepl_profile, threshold_percent=80)` → (edge, max_dose),
-  sub-voxel linear interpolation. (`scripts/` define a thin `find_r80` wrapper on depth.)
-- `predict_range_shift(wepl_ref, wepl_sct)`; `classify_risk(delta_wepl, dose_gradient,
-  gradient_threshold=0.1)` → int8 classes 0/1/2.
+```python
+gamma_3d(ref, evl, dose_crit=0.03, dist_crit_mm=3.0, spacing_xyz=(1.,1.,3.),
+         dose_threshold=0.10) -> {"gamma": ndarray, "pass_rate": float, "n_evaluated": int}
+    # global normalization; shifted-array search within dist_crit; NaN outside mask
+gamma_1d(ref, evl, dx_mm, dose_crit=0.03, dist_crit_mm=3.0,
+         dose_threshold=0.10) -> {"gamma": ndarray, "pass_rate": float}
+```
 
-### Planned (not yet implemented)
-`io.plan_parser`, `io.dose_loader`, `io.dataset_manifest`, `metrics.gamma_index`,
-`metrics.dose_difference`, `metrics.range_metrics`, `visualization.*`.
+## `synthqa_core.metrics.dose_difference`
+
+```python
+absolute_difference(ref, evl) -> ndarray                 # Gy
+relative_difference_global(ref, evl) -> ndarray          # % of max(ref)
+relative_difference_local(ref, evl, eps=1e-8) -> ndarray # % of local ref (NaN where ref≈0)
+summary(ref, evl, dose_threshold=0.10, delta_pct=2.0) -> dict
+    # mean/max |ΔD|, mean relative diff, fraction exceeding delta_pct, n_evaluated
+```
+
+## `synthqa_core.metrics.range_metrics`
+
+```python
+distal_edge(depth_mm, dose, fraction=0.8) -> float       # sub-voxel R80/R90 of a profile
+distal_edge_map(dose, spacing_axis_mm, axis=0, fraction=0.8) -> 2D ndarray   # mm, vectorized
+range_shift_map(ref, evl, spacing_axis_mm, axis=0, fraction=0.8) -> 2D ndarray
+    # evl edge − ref edge (mm); positive = distal shift; NaN where undefined
+range_shift_stats(shift_map, mask=None) -> {"mean","std","p95","n"}
+```
+
+## `synthqa_core.visualization.slice_viewer`
+
+```python
+get_slice(volume, plane="axial", index=None, spacing_xyz=(1.,1.,3.)) -> (2D, extent_mm)
+plot_slice(volume, plane=..., index=..., spacing_xyz=..., cmap="bone", vmin=None,
+           vmax=None, overlay=None, overlay_cmap="inferno", overlay_alpha=0.55,
+           overlay_floor=None, title="", cbar_label=None) -> (fig, ax)
+compare_slices(volumes, titles, plane=..., index=..., spacing_xyz=...,
+               cmap="bone", vmin=None, vmax=None) -> (fig, axes)
+```
+
+## `synthqa_core.visualization.wepl_heatmap`
+
+```python
+plot_wepl(wepl2d, extent=None, cmap="viridis", title="", cbar_label="WEPL (mm)") -> (fig, ax)
+plot_delta_wepl(d2d, extent=None, vmax=None, cmap="bwr", title="",
+                cbar_label="ΔWEPL (mm)") -> (fig, ax)   # symmetric limits ±vmax
+```
+
+## `synthqa_core.visualization.risk_overlay`
+
+```python
+RISK_CMAP   # black→red→yellow→white
+overlay_risk(ct2d, risk2d, extent=None, ct_range=(-1024,2000), risk_floor=0.01,
+             alpha=0.6, contours=(), legend_handles=(), title="") -> (fig, ax)
+    # contours: iterable of (array2d, level, color), e.g. R80 of ref/sCT dose
+overlay_classes(ct2d, cls2d, extent=None, ct_range=(-1024,2000),
+                colors=(None,"yellow","red"), alpha=0.45, title="") -> (fig, ax)
+```
+
+---
 
 ## Scripts
 
-| Script | Purpose | Key outputs |
+| Script | Purpose | Outputs |
 |---|---|---|
-| `run_proton_qa.py` | CLI QA on local triplet | risk map, classes, timing |
-| `synthetic_benchmark.py` | phantom end-to-end | r, timing, Fig console summary |
-| `generate_figures.py` | manuscript Figs 1–4 | `figures/Fig1–4*.png` |
-| `benchmark_dataset.py` | stratified real-data benchmark; `MODE = "uniform" \| "bone_only"` | Figs 6–7, stratified table |
-| `benchmark_pyradplan.py` | head-to-head vs pyRadPlan (needs `pyRadPlan==0.3.5`) | Fig 8, Table 4 |
-| `reviewer_stats.py` | bootstrap CIs, Bland–Altman, subgroups, cohort expansion | Figs 9–11, stats console |
+| `run_proton_qa.py` | CLI QA on a CT/sCT/dose triplet | risk map, classes, timing |
+| `synthetic_benchmark.py` | self-contained analytical validation | r, timing |
+| `generate_figures.py` | phantom, Bragg profiles, overlay, scatter | Figs 1–4 |
+| `benchmark_dataset.py` | stratified DoseRAD2026 benchmark (targeted HF download, bone-targeted rays, proximal-bone tracking) | Figs 6–7, sensitivity/specificity table |
+| `benchmark_pyradplan.py` | head-to-head vs pyRadPlan Hong PB (energy snapping included) | Fig 8, Table 4 |
+| `reviewer_stats.py` | bootstrap CIs, Bland–Altman, Mann–Whitney subgroups, cohort expansion | Figs 9–11 |
 
 ## Testing
-`pytest tests/ -v` — covers loader axis ordering, water equivalence (HU 0 → ≈1.006 g/cm³),
-axis-aligned and arbitrary-ray WEPL on analytic phantoms, gradient-weighted risk behavior,
-R80 recovery, threshold gating.
+
+```bash
+pytest tests/ -v
+```
+Suites: `test_phase1.py` (loader axes, water equivalence), `test_phase2_3.py` (SPR, axis &
+ray WEPL), `test_phase4.py` (risk formula, R80, thresholds),
+`test_metrics_visualization.py` (gamma identity/shift, dose-difference stats,
+vectorized range maps, visualization smoke tests).
+
+## Troubleshooting
+
+- pyRadPlan requires beamlet energies snapped to `machine.energies` (else `KeyError`).
+- matplotlib ≥ 3.10: `boxplot(labels=...)` removed → `set_xticklabels`.
+- HF: set `HF_TOKEN`; Windows symlink warning is harmless
+  (`HF_HUB_DISABLE_SYMLINKS_WARNING=1`).
