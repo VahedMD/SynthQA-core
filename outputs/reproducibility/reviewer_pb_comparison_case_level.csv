@@ -1,0 +1,12 @@
+Patient,Region,Metal,Pred_mm,PB_shift_mm,Surrogate_ms,PB_total_ms
+1THB016,Thorax,True,0.29,0.35,16.92,79458
+1THB021,Thorax,True,0.57,0.11,26.83,228072
+1THB029,Thorax,True,0.42,0.28,13.19,124084
+1THB002,Thorax,False,0.58,3.7,19.44,148126
+1THB008,Thorax,False,0,-0.01,23.14,115796
+1THB011,Thorax,False,0.09,0.18,28.14,125135
+1ABB078,Abdomen,True,0,-0.01,13.98,174882
+1ABB138,Abdomen,True,0,-0.03,11.34,106363
+1ABB006,Abdomen,False,0,-0.01,13.01,154449
+1ABB011,Abdomen,False,0,0.03,8.06,84954
+1ABB020,Abdomen,False,0.31,0.31,5.92,92752

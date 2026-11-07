@@ -231,10 +231,11 @@ def fig4_scatter(d):
     cbar = fig.colorbar(sc, ax=ax)
     cbar.set_label("Depth Z (mm)")
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT_DIR, "Fig4_Scatter_Correlation.png"),
+    # Legacy synthetic voxel-wise demonstration: deliberately not manuscript Fig. 4.
+    fig.savefig(os.path.join(OUT_DIR, "Fig4_Legacy_Synthetic_Scatter.png"),
                 dpi=300, bbox_inches='tight')
     plt.close(fig)
-    print("  Saved Fig4_Scatter_Correlation.png")
+    print("  Saved Fig4_Legacy_Synthetic_Scatter.png (legacy synthetic demonstration)")
 
 
 # ------------------------------------------------------------- main -------
@@ -247,7 +248,7 @@ if __name__ == "__main__":
     fig1_phantom_geometry(data)
     fig2_bragg_profiles(data)
     fig3_risk_overlay(data)
-    fig4_scatter(data)
+    fig4_scatter(data)  # saved with Legacy_ prefix; manuscript Fig. 4 is regenerated from the refreshed patient CSV
 
     print("\nSuggested manuscript captions:")
     print(" Fig 1: Synthetic phantom (coronal plane). The proton beam enters from the top;")

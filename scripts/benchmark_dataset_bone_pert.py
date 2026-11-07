@@ -14,10 +14,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
 from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from cohort_manifest import new_run, base_record, append_manifest_rows, discover_stratified_cohort
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
-METAL_PIDS = {"1THB016","1THB021","1THB029","1THB031","1THB052","1THB054",
-              "1THB067","1THB078","1THB122","1THB214","1THB217","1ABB138","1ABB078"}
 
 MODE         = "bone_only"   
 BONE_THRESH  = 300.0         
@@ -32,13 +31,8 @@ def range_mm(E_mev):
     return 0.022 * E_mev ** 1.77
 
 def discover_patients():
-    files = list_repo_files(REPO_ID, repo_type="dataset")
-    pids = sorted({f.split("/")[2] for f in files if f.startswith("proton/training/") and len(f.split("/")) >= 3})
-    sel = lambda pre, met, n: [p for p in pids if p.startswith(pre) and (p in METAL_PIDS) == met][:n]
-    return ([{"pid": p, "region": "Thorax",  "metal": True}  for p in sel("1THB", True, 3)] +
-            [{"pid": p, "region": "Thorax",  "metal": False} for p in sel("1THB", False, 3)] +
-            [{"pid": p, "region": "Abdomen", "metal": True}  for p in sel("1ABB", True, 2)] +
-            [{"pid": p, "region": "Abdomen", "metal": False} for p in sel("1ABB", False, 4)])
+    """Use the shared deterministic stratified-cohort definition."""
+    return discover_stratified_cohort(REPO_ID)
 
 def extract_1d_ray_profile(vol, sp, org, rs, rt, num_samples=2000):
     from scipy.ndimage import map_coordinates
@@ -63,39 +57,71 @@ def find_r80(dose, depth):
     return depth[i]
 
 def run():
+    run_meta = new_run(__file__)
     prof = CalibrationProfile()
-    results, timings = [], []
+    results, timings, manifest_rows = [], [], []
     plt.figure(figsize=(10, 7))
 
-    for cfg in discover_patients():
+    patient_configs = discover_patients()
+    for selection_order, cfg in enumerate(patient_configs, start=1):
         pid = cfg["pid"]
+        row = base_record(run_meta, "model_b_stratified_bone_water", pid,
+            anatomical_region=cfg["region"], metal_status=bool(cfg["metal"]),
+            selection_method="deterministic sorted patient IDs by prefix and metal-status quotas; first n per stratum",
+            perturbation_model="Model B: high-HU reduction", perturbation_threshold_hu=BONE_THRESH,
+            perturbation_delta_hu=BONE_SHIFT, candidate_rays_examined=0, candidate_beamlets_examined=0,
+            rays_rejected_short_wepl=0, dose_download_failures=0, invalid_dose_profiles=0,
+            dose_engine_failures=0, eligible_rays=0, outcome_status="selected_pending",
+            notes_json={"selection_order": selection_order,
+                        "target_stratum_counts": {"thorax_metal": 3, "thorax_clean": 3, "abdomen_metal": 2, "abdomen_clean": 4},
+                        "mode": MODE})
         print(f"\n{cfg['region']} {pid} (Metal={cfg['metal']})...", end=" ")
         try:
             plan_p = hf_hub_download(REPO_ID, f"proton/training/{pid}/{pid}.json", repo_type="dataset")
             ct_p   = hf_hub_download(REPO_ID, f"proton/training/{pid}/image/ct.mha", repo_type="dataset")
-        except Exception:
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="plan_or_CT_download_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
             print("[missing]"); continue
 
-        ct = load_mha(ct_p)
+        try:
+            ct = load_mha(ct_p)
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="CT_parse_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
+            print("[invalid CT]"); continue
         ct_arr, sp, org = ct["array"], ct["spacing_xyz"], ct["origin_xyz"]
         spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
         spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(apply_sct_error(ct_arr)))
 
-        plan = json.load(open(plan_p))
+        try:
+            with open(plan_p, encoding="utf-8") as f:
+                plan = json.load(f)
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="plan_json_parse_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
+            print("[invalid plan]"); continue
 
         # Pre-selection: Find rays that have *any* bone in the path to prioritize downloads
         bone_candidates = []
         water_candidates = []
         for b in plan["beams"][:4]:
             for r in b["rays"]:
+                row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
                 w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
-                if w[-1] < 10.0: continue
+                if w[-1] < 10.0:
+                    row["rays_rejected_short_wepl"] += 1
+                    continue
                 target_wepl = 0.9 * w[-1]
                 dist = np.linalg.norm(rt - rs)
                 ct1, _, _ = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, num_samples=400)
                 bone_mm = dist * np.mean(ct1 > BONE_THRESH)
                 for bl in r["beamlets"]:
+                    row["candidate_beamlets_examined"] += 1
                     e_fit = abs(range_mm(bl["energy"]) - target_wepl)
                     cand = (e_fit, b, r, bl, rs, rt, bone_mm)
                     if bone_mm > 1.0: bone_candidates.append(cand)
@@ -106,6 +132,8 @@ def run():
         candidates = bone_candidates[:3] + water_candidates[:2]
         
         if not candidates:
+            row.update(outcome_status="excluded", exclusion_reason="no_candidate_rays_after_wepl_filter")
+            manifest_rows.append(row)
             print("SKIPPED"); continue
 
         found = False
@@ -115,14 +143,25 @@ def run():
             try:
                 d3 = load_mha(hf_hub_download(REPO_ID, fp, repo_type="dataset"))["array"]
             except Exception:
+                row["dose_download_failures"] += 1
                 continue
             d1, dist, step = extract_1d_ray_profile(d3, sp, org, rs, rt, num_samples=2000)
             pk = np.argmax(d1)
             if pk > 0.2*len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1*d1[pk]:
                 found = True
+                row.update(selected_beam_idx=b_idx, selected_ray_idx=r_idx, selected_beamlet_idx=l_idx,
+                           eligible_rays=1, outcome_status="included", exclusion_reason="",
+                           notes_json={**row["notes_json"], "selected_dose_file": fp,
+                                       "selected_energy_mev": bl.get("energy"),
+                                       "ray_source": rs.tolist(), "ray_target": rt.tolist(),
+                                       "eligible_rays_semantics": "selected valid ray; search stops after first valid profile"})
                 print(f"(B{b_idx}R{r_idx}L{l_idx})", end=" ")
                 break
+            else:
+                row["invalid_dose_profiles"] += 1
         if not found:
+            row.update(outcome_status="excluded", exclusion_reason="no_valid_dose_profile_in_candidate_set")
+            manifest_rows.append(row)
             print("SKIPPED"); continue
 
         # STRICT PROXIMAL BONE CHECK: Only count bone *before* the Bragg peak
@@ -157,13 +196,23 @@ def run():
         results.append({"Patient": pid, "Region": cfg["region"], "Metal": cfg["metal"],
                         "Bone_mm": bone_mm_proximal, "r_gated": r_g,
                         "Pred_mm": pred_shift, "Act_mm": act_shift, "Time_ms": timings[-1]})
+        row.update(surrogate_shift_mm=float(pred_shift), reference_shift_mm=float(act_shift),
+                   surrogate_runtime_ms=float(timings[-1]),
+                   notes_json={**row["notes_json"], "proximal_bone_path_mm": float(bone_mm_proximal),
+                               "gated_risk_error_correlation": None if np.isnan(r_g) else float(r_g),
+                               "bone_water_subgroup": "bone" if bone_mm_proximal >= 1.0 else "water"})
+        manifest_rows.append(row)
         
         c = 'red' if cfg['metal'] else 'blue'
         m = 'x' if cfg['region'] == 'Thorax' else 'o'
         plt.scatter(pred_shift, act_shift, s=80, c=c, marker=m, alpha=0.9)
         print(f"Prox_Bone={bone_mm_proximal:.1f}mm | pred={pred_shift:+.2f} act={act_shift:+.2f} mm")
 
+    append_manifest_rows(manifest_rows, __file__)
     df = pd.DataFrame(results)
+    out_dir = os.path.join("outputs", "reproducibility")
+    os.makedirs(out_dir, exist_ok=True)
+    df.to_csv(os.path.join(out_dir, "model_b_bone_water_case_level.csv"), index=False, float_format="%.10g")
     dv = df.dropna(subset=["Act_mm"])
     
     # Split into Bone Rays and Water Rays for statistics

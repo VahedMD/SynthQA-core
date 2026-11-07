@@ -1,0 +1,42 @@
+
+{
+  "schema_version": "1.0",
+  "study": "SynthQA-core proton therapy surrogate QA",
+  "cohorts": {
+    "model_a_expansion": {
+      "perturbation": "global_hu_bias",
+      "perturbation_value_hu": 50,
+      "target_patient_count": 17,
+      "patient_ids": [],
+      "selection_method": null,
+      "inclusion_criteria": [],
+      "exclusion_criteria": [],
+      "analysis_status": "pending_verification"
+    },
+    "model_b_stratified": {
+      "perturbation": "high_hu_reduction",
+      "threshold_hu": 300,
+      "perturbation_value_hu": -200,
+      "target_patient_count": 11,
+      "patient_ids": [],
+      "selection_method": null,
+      "inclusion_criteria": [],
+      "exclusion_criteria": [],
+      "analysis_status": "pending_verification"
+    },
+    "pyradplan_comparison": {
+      "reference_engine": "pyRadPlan",
+      "target_patient_count": 11,
+      "patient_ids": [],
+      "selection_method": null,
+      "inclusion_criteria": [],
+      "exclusion_criteria": [],
+      "analysis_status": "pending_verification"
+    }
+  },
+  "overlap_policy": {
+    "allowed_between_cohorts": null,
+    "justification": null
+  },
+  "random_seed": 42
+}

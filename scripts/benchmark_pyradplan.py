@@ -22,10 +22,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
 from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from cohort_manifest import new_run, base_record, append_manifest_rows, discover_stratified_cohort
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
-METAL_PIDS = {"1THB016","1THB021","1THB029","1THB031","1THB052","1THB054",
-              "1THB067","1THB078","1THB122","1THB214","1THB217","1ABB138","1ABB078"}
 
 BONE_THRESH, BONE_SHIFT = 300.0, -200.0
 
@@ -52,14 +51,8 @@ except ImportError:
 def range_mm(E): return 0.022 * E ** 1.77
 
 def discover_patients():
-    files = list_repo_files(REPO_ID, repo_type="dataset")
-    pids = sorted({f.split("/")[2] for f in files
-                   if f.startswith("proton/training/") and len(f.split("/")) >= 3})
-    sel = lambda pre, met, n: [p for p in pids if p.startswith(pre) and (p in METAL_PIDS) == met][:n]
-    return ([{"pid": p, "region": "Thorax",  "metal": True}  for p in sel("1THB", True, 3)] +
-            [{"pid": p, "region": "Thorax",  "metal": False} for p in sel("1THB", False, 3)] +
-            [{"pid": p, "region": "Abdomen", "metal": True}  for p in sel("1ABB", True, 2)] +
-            [{"pid": p, "region": "Abdomen", "metal": False} for p in sel("1ABB", False, 4)])
+    """Use the shared deterministic stratified-cohort definition."""
+    return discover_stratified_cohort(REPO_ID)
 
 def ray_profile(vol, sp, org, rs, rt, n=2000):
     from scipy.ndimage import map_coordinates
@@ -120,38 +113,70 @@ def run_pb_dose(ct_path, b, bl, energy, machine, machine_energies):
     return sitk.GetArrayFromImage(d), d.GetSpacing(), d.GetOrigin(), ms
 
 def run():
+    run_meta = new_run(__file__)
     prof = CalibrationProfile()
-    results = []
+    results, manifest_rows = [], []
     machine = load_from_name("protons", "Generic") if HAS_PB else None
     machine_energies = np.array(sorted(machine.energies), dtype=float) if HAS_PB else None
 
-    for cfg in discover_patients():
+    patient_configs = discover_patients()
+    for selection_order, cfg in enumerate(patient_configs, start=1):
         pid = cfg["pid"]
+        row = base_record(run_meta, "model_b_pyradplan", pid,
+            anatomical_region=cfg["region"], metal_status=bool(cfg["metal"]),
+            selection_method="deterministic sorted patient IDs by prefix and metal-status quotas; first n per stratum",
+            perturbation_model="Model B: high-HU reduction", perturbation_threshold_hu=BONE_THRESH,
+            perturbation_delta_hu=BONE_SHIFT, candidate_rays_examined=0, candidate_beamlets_examined=0,
+            rays_rejected_short_wepl=0, dose_download_failures=0,
+            invalid_dose_profiles=0, dose_engine_failures=0, eligible_rays=0, outcome_status="selected_pending",
+            notes_json={"selection_order": selection_order,
+                        "target_stratum_counts": {"thorax_metal": 3, "thorax_clean": 3, "abdomen_metal": 2, "abdomen_clean": 4},
+                        "dose_engine": "pyRadPlan forward calculations on reference CT and perturbed sCT"})
         print(f"\n{cfg['region']} {pid} (Metal={cfg['metal']})...", end=" ")
         try:
             plan_p = hf_hub_download(REPO_ID, f"proton/training/{pid}/{pid}.json", repo_type="dataset")
             ct_p   = hf_hub_download(REPO_ID, f"proton/training/{pid}/image/ct.mha", repo_type="dataset")
-        except Exception:
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="plan_or_CT_download_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
             print("[missing]"); continue
 
-        ct = load_mha(ct_p)
+        try:
+            ct = load_mha(ct_p)
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="CT_parse_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
+            print("[invalid CT]"); continue
         ct_arr, sp, org, direction = ct["array"], ct["spacing_xyz"], ct["origin_xyz"], ct["direction"]
         spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
         sct_arr = ct_arr.copy(); sct_arr[ct_arr > BONE_THRESH] += BONE_SHIFT
         spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(sct_arr))
-        plan = json.load(open(plan_p))
+        try:
+            with open(plan_p, encoding="utf-8") as f:
+                plan = json.load(f)
+        except Exception as exc:
+            row.update(outcome_status="excluded", exclusion_reason="plan_json_parse_failed",
+                       notes_json={**row["notes_json"], "error": str(exc)[:500]})
+            manifest_rows.append(row)
+            print("[invalid plan]"); continue
 
         # --- candidate rays: prefer proximal bone, snap energy ---
         cands = []
         for b in plan["beams"][:4]:
             for r in b["rays"]:
+                row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
                 w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
-                if w[-1] < 10.0: continue
+                if w[-1] < 10.0:
+                    row["rays_rejected_short_wepl"] += 1
+                    continue
                 dist = np.linalg.norm(rt - rs)
                 ct1, _ = ray_profile(ct_arr, sp, org, rs, rt, n=400)
                 bone_mm = dist * np.mean(ct1 > BONE_THRESH)
                 for bl in r["beamlets"]:
+                    row["candidate_beamlets_examined"] += 1
                     e_fit = abs(range_mm(bl["energy"]) - 0.9 * w[-1])
                     cands.append((0.0 if bone_mm > 1.0 else 1.0, e_fit, b, r, bl, rs, rt))
         cands.sort(key=lambda c: (c[0], c[1]))
@@ -170,17 +195,20 @@ def run():
             try:
                 pb_ref_arr, pb_sp, pb_org, ms_ref = run_pb_dose(ct_p, b, blx, energy, machine, machine_energies)
             except Exception as e:
+                row["dose_engine_failures"] += 1
                 print(f"\n  [PB ERROR ref] {e}"); traceback.print_exc(); continue
 
             d1, dist = ray_profile(pb_ref_arr, pb_sp, pb_org, rs, rt)
             pk = np.argmax(d1)
             if not (pk > 0.2 * len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1 * d1[pk]):
+                row["invalid_dose_profiles"] += 1
                 continue  # shallow/invalid peak -> next candidate
 
             # --- 2) pyRadPlan on perturbed sCT (timed) ---
             try:
                 pb_sct_arr, _, _, ms_sct = run_pb_dose(tmp_sct, b, blx, energy, machine, machine_energies)
             except Exception as e:
+                row["dose_engine_failures"] += 1
                 print(f"\n  [PB ERROR sct] {e}"); continue
 
             depth = np.arange(len(d1)) * (dist / (len(d1) - 1))
@@ -199,15 +227,30 @@ def run():
                             "PB_ref_ms": ms_ref, "PB_sct_ms": ms_sct,
                             "PB_total_ms": ms_ref + ms_sct,
                             "Pred_mm": pred_shift, "PB_shift_mm": pb_shift})
+            row.update(selected_beam_idx=b.get("beam_idx", 0), selected_ray_idx=r.get("ray_idx", 0),
+                selected_beamlet_idx=bl.get("beamlet_idx", 0), selected_energy_mev=energy,
+                eligible_rays=1, outcome_status="included", exclusion_reason="",
+                surrogate_shift_mm=float(pred_shift), reference_shift_mm=float(pb_shift),
+                surrogate_runtime_ms=float(ms_sur), reference_runtime_ms=float(ms_ref + ms_sct),
+                notes_json={**row["notes_json"], "ray_source": rs.tolist(), "ray_target": rt.tolist(),
+                            "energy_before_machine_snap_mev": bl.get("energy"),
+                            "energy_snapped_to_machine": bool(HAS_PB and energy != float(bl.get("energy", energy))),
+                            "eligible_rays_semantics": "one selected valid ray; search stops after first valid pyRadPlan dose pair"})
             print(f"(B{b.get('beam_idx',0)}R{r.get('ray_idx',0)}L{bl.get('beamlet_idx',0)}, "
                   f"E={energy:.1f}) pred={pred_shift:+.2f} PB={pb_shift:+.2f} mm | "
                   f"sur={ms_sur:.2f} ms vs PB={ms_ref+ms_sct:.0f} ms")
             done = True
             break
         if not done:
+            row.update(outcome_status="excluded", exclusion_reason="no_valid_pyRadPlan_ray_after_top_3_candidates")
             print("SKIPPED")
+        manifest_rows.append(row)
 
+    append_manifest_rows(manifest_rows, __file__)
     df = pd.DataFrame(results)
+    out_dir = os.path.join("outputs", "reproducibility")
+    os.makedirs(out_dir, exist_ok=True)
+    df.to_csv(os.path.join(out_dir, "model_b_pyradplan_case_level.csv"), index=False, float_format="%.10g")
     print("\n" + "=" * 78)
     print("TABLE 4: WEPL SURROGATE vs pyRadPlan (Hong PB) — TIME & AGREEMENT")
     print("=" * 78)
