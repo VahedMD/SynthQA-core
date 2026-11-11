@@ -1,0 +1,179 @@
+{
+  "patient_id": "1THB078",
+  "selection": {
+    "beam_idx": 2,
+    "ray_idx": 3,
+    "beamlet_idx": 0,
+    "energy_mev": 114.5392,
+    "dose_file": "proton/training/1THB078/dose/Dose_B2_R3_L0.mha",
+    "candidate_rays_examined": 24,
+    "energy_mismatch_mm": 5.428758943031923,
+    "dose_download_failures_before_selected": [],
+    "ray_source_xyz": [
+      340.9,
+      -940.76,
+      -14.39
+    ],
+    "ray_target_xyz": [
+      0.7639183455618763,
+      -0.38377424949476335,
+      -14.39
+    ],
+    "ray_length_mm": 999.9999999999999
+  },
+  "geometry": {
+    "ct_shape_zyx": [
+      121,
+      507,
+      543
+    ],
+    "dose_shape_zyx": [
+      121,
+      507,
+      543
+    ],
+    "ct_spacing_xyz": [
+      1.0,
+      1.0,
+      3.0
+    ],
+    "dose_spacing_xyz": [
+      1.0,
+      1.0,
+      3.0
+    ],
+    "ct_origin_xyz": [
+      -269.0,
+      -233.0,
+      -180.0
+    ],
+    "dose_origin_xyz": [
+      -269.0,
+      -233.0,
+      -180.0
+    ],
+    "ct_direction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "dose_direction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "geometry_checks": {
+      "shape_equal": true,
+      "spacing_equal": true,
+      "origin_equal": true,
+      "direction_equal": true,
+      "all_equal": true
+    },
+    "dose_profile_max_abs_difference_if_dose_metadata_used": 0.0
+  },
+  "profile": {
+    "num_samples": 2000,
+    "step_mm": 0.5002501250625312,
+    "reference_peak_depth_mm": 983.4917458729363,
+    "reference_peak_dose": 0.0013952206149500295,
+    "reconstructed_peak_depth_mm": 975.9879939969983,
+    "reconstructed_peak_dose": 0.0013951245654985082,
+    "reference_r80_mm": 986.0192304859725,
+    "reconstructed_r80_mm": 978.4373618395334,
+    "reconstructed_r80_shift_mm": -7.581868646439034,
+    "reference_r80_crossing": {
+      "peak_index": 1966,
+      "peak_depth_mm": 983.4917458729363,
+      "peak_dose": 0.0013952206149500295,
+      "threshold_80pct_own_peak": 0.0011161764919600237,
+      "lower_index": 1971,
+      "upper_index": 1972,
+      "lower_depth_mm": 985.9929964982489,
+      "upper_depth_mm": 986.4932466233115,
+      "lower_dose": 0.0011213644993817906,
+      "upper_dose": 0.00102243553025558,
+      "interpolation_fraction": 0.05244174145945272
+    },
+    "reconstructed_r80_crossing": {
+      "peak_index": 1951,
+      "peak_depth_mm": 975.9879939969983,
+      "peak_dose": 0.0013951245654985082,
+      "threshold_80pct_own_peak": 0.0011160996523988066,
+      "lower_index": 1955,
+      "upper_index": 1956,
+      "lower_depth_mm": 977.9889944972484,
+      "upper_depth_mm": 978.489244622311,
+      "lower_dose": 0.0012080181456140407,
+      "upper_dose": 0.0011054633130248728,
+      "interpolation_fraction": 0.896286317227559
+    }
+  },
+  "first_order_audit": {
+    "r80_t_parameter": 0.9860192304859726,
+    "segment_index": 488,
+    "segment_t_start": 0.9849887466697287,
+    "segment_t_end": 0.9860521508399074,
+    "spr_ref_local_segment": 1.0202759504318237,
+    "spr_sct_local_segment": 1.0706162452697754,
+    "delta_spr_local_segment": 0.05034029483795166,
+    "delta_wepl_r80_from_exact_segment_integration_mm": 8.184060695402348,
+    "delta_wepl_r80_from_profile_interpolation_mm": 8.18406069555094,
+    "first_order_predicted_shift_mm": -8.021418805312925,
+    "inverse_wepl_mapped_r80_depth_mm": 978.4372037771784,
+    "inverse_wepl_mapped_shift_mm": -7.5820267087940465,
+    "difference_first_order_minus_inverse_map_mm": -0.439392096518878,
+    "gradient_window_estimates": {
+      "1mm": {
+        "n": 4,
+        "slope_mm_per_mm": 1.0377458293677981,
+        "predicted_shift_mm": -7.886382642016231
+      },
+      "2mm": {
+        "n": 8,
+        "slope_mm_per_mm": 1.040508016333485,
+        "predicted_shift_mm": -7.865447038447353
+      },
+      "5mm": {
+        "n": 20,
+        "slope_mm_per_mm": 1.0405374866957358,
+        "predicted_shift_mm": -7.865224271294367
+      },
+      "10mm": {
+        "n": 40,
+        "slope_mm_per_mm": 1.0384724292766527,
+        "predicted_shift_mm": -7.880864686269565
+      },
+      "20mm": {
+        "n": 68,
+        "slope_mm_per_mm": 1.041281611180103,
+        "predicted_shift_mm": -7.859603595876237
+      }
+    }
+  },
+  "wepl_profile": {
+    "reference_monotonic": true,
+    "sct_monotonic": true,
+    "reference_flat_steps": 1503,
+    "sct_flat_steps": 1503,
+    "reference_unique_fraction": 0.2485,
+    "sct_unique_fraction": 0.2485,
+    "unique_reference_wepl_count": 497,
+    "unique_sct_wepl_count": 497,
+    "reference_wepl_total_mm": 113.80967855732835,
+    "sct_wepl_total_mm": 122.69753617892077,
+    "delta_wepl_total_mm": 8.887857621592422
+  },
+  "interpretation": "The remapped R80 and inverse-WEPL map are analytical reconstructions from the reference dose profile, not independent perturbed-image MC/PB calculations. The first-order estimate is a local linearization; a large finite shift can differ if the inverse mapping traverses regions with a different SPR."
+}
