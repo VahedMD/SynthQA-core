@@ -1,4 +1,3 @@
-
 {
   "schema_version": "1.0",
   "study": "SynthQA-core proton therapy surrogate QA",
@@ -32,6 +31,24 @@
       "inclusion_criteria": [],
       "exclusion_criteria": [],
       "analysis_status": "pending_verification"
+    },
+    "model_a_stratified": {
+      "perturbation": "global_hu_bias",
+      "perturbation_value_hu": 50,
+      "target_patient_count": 12,
+      "patient_ids": [],
+      "selection_method": "stratified by region and metal-artifact status; 3 thorax-metal, 3 thorax-nonmetal, 2 abdomen-metal (all available), and 4 abdomen-nonmetal; continue to next sorted candidate within a stratum when a candidate is invalid until the stratum target is reached",
+      "inclusion_criteria": [
+        "public proton training case",
+        "valid CT and plan",
+        "at least one valid distal dose profile"
+      ],
+      "exclusion_criteria": [
+        "download/parse failure",
+        "no eligible dose profile after candidate search",
+        "invalid reference R80"
+      ],
+      "analysis_status": "pending_rerun_after_Siddon_R80_update"
     }
   },
   "overlap_policy": {

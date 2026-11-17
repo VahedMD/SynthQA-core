@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
-from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from synthqa_core.surrogates.wepl import compute_wepl_along_ray, sample_volume_at_ray_positions
 from cohort_manifest import new_run, base_record, append_manifest_rows, discover_stratified_cohort
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
@@ -34,14 +34,13 @@ def discover_patients():
     """Use the shared deterministic stratified-cohort definition."""
     return discover_stratified_cohort(REPO_ID)
 
-def extract_1d_ray_profile(vol, sp, org, rs, rt, num_samples=2000):
-    from scipy.ndimage import map_coordinates
-    t = np.linspace(0, 1, num_samples)
-    p = rs[None, :] + t[:, None] * (rt - rs)[None, :]
-    ix, iy, iz = (p[:,0]-org[0])/sp[0], (p[:,1]-org[1])/sp[1], (p[:,2]-org[2])/sp[2]
-    prof = map_coordinates(vol, np.array([iz, iy, ix]), order=1, mode='constant', cval=0.0)
-    dist = np.linalg.norm(rt - rs)
+def extract_1d_ray_profile(vol, sp, org, rs, rt, num_samples=2000, direction=None):
+    prof, distances = sample_volume_at_ray_positions(
+        vol, sp, org, rs, rt, num_samples=num_samples, direction=direction
+    )
+    dist = float(distances[-1])
     return prof, dist, dist/(num_samples-1)
+
 
 def find_r80(dose, depth):
     pk = np.argmax(dose)
@@ -92,7 +91,7 @@ def run():
                        notes_json={**row["notes_json"], "error": str(exc)[:500]})
             manifest_rows.append(row)
             print("[invalid CT]"); continue
-        ct_arr, sp, org = ct["array"], ct["spacing_xyz"], ct["origin_xyz"]
+        ct_arr, sp, org, direction = ct["array"], ct["spacing_xyz"], ct["origin_xyz"], ct["direction"]
         spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
         spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(apply_sct_error(ct_arr)))
 
@@ -112,13 +111,13 @@ def run():
             for r in b["rays"]:
                 row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
-                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
+                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400, direction=direction)
                 if w[-1] < 10.0:
                     row["rays_rejected_short_wepl"] += 1
                     continue
                 target_wepl = 0.9 * w[-1]
                 dist = np.linalg.norm(rt - rs)
-                ct1, _, _ = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, num_samples=400)
+                ct1, _, _ = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, num_samples=400, direction=direction)
                 bone_mm = dist * np.mean(ct1 > BONE_THRESH)
                 for bl in r["beamlets"]:
                     row["candidate_beamlets_examined"] += 1
@@ -145,7 +144,7 @@ def run():
             except Exception:
                 row["dose_download_failures"] += 1
                 continue
-            d1, dist, step = extract_1d_ray_profile(d3, sp, org, rs, rt, num_samples=2000)
+            d1, dist, step = extract_1d_ray_profile(d3, sp, org, rs, rt, num_samples=2000, direction=direction)
             pk = np.argmax(d1)
             if pk > 0.2*len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1*d1[pk]:
                 found = True
@@ -165,12 +164,12 @@ def run():
             print("SKIPPED"); continue
 
         # STRICT PROXIMAL BONE CHECK: Only count bone *before* the Bragg peak
-        ct1_full, _, _ = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, num_samples=2000)
+        ct1_full, _, _ = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, num_samples=2000, direction=direction)
         bone_mm_proximal = step * np.sum(ct1_full[:pk] > BONE_THRESH)
 
         t0 = time.perf_counter()
-        w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000)
-        w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000)
+        w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000, direction=direction)
+        w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000, direction=direction)
         dwepl = w_sct - w_ref
         timings.append((time.perf_counter()-t0)*1000)
 

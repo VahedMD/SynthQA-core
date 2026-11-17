@@ -24,9 +24,8 @@ MANIFEST_FIELDS = [
     "reference_runtime_ms", "notes_json"
 ]
 
-# Shared cohort metadata conventions used by the existing stratified analyses.
-# Metal labels follow the project's current METAL_PIDS membership rule; this is
-# an operational code-level label, not an independently verified dataset field.
+# Metal-artifact patient IDs transcribed from DoseRAD2026 dataset paper,
+# Appendix C. The published list contains 11 thoracic and 2 abdominal cases.
 METAL_PIDS = frozenset({
     "1THB016", "1THB021", "1THB029", "1THB031", "1THB052", "1THB054",
     "1THB067", "1THB078", "1THB122", "1THB214", "1THB217", "1ABB138", "1ABB078"
@@ -52,8 +51,7 @@ def patient_metadata(patient_id: str) -> dict[str, Any]:
         region_source = "unknown; no mapping rule available"
     if region:
         metal = patient_id in METAL_PIDS
-        metal_source = ("project METAL_PIDS membership rule; not independently verified "
-                        "against patient-level dataset metadata")
+        metal_source = "DoseRAD2026 dataset paper, Appendix C: published metal-artifact case list"
     else:
         metal = ""
         metal_source = "unknown; patient ID has no recognized prefix"
@@ -80,6 +78,44 @@ def discover_stratified_cohort(repo_id: str, patient_ids: Iterable[str] | None =
         stratum = [pid for pid in pids if pid.startswith(prefix) and (pid in METAL_PIDS) == metal]
         region = "Thorax" if prefix == "1THB" else "Abdomen"
         configs.extend({"pid": pid, "region": region, "metal": metal} for pid in stratum[:quota])
+    return configs
+
+
+def discover_stratified_reservation_pool(repo_id: str, patient_ids: Iterable[str] | None = None,
+                                         reserve_candidates: int = 1) -> list[dict[str, Any]]:
+    """Return nominal stratum members plus a limited number of fallbacks.
+
+    Expansion-cohort selection uses this set to avoid overlap with patients
+    that may replace failed candidates in the stratified benchmark.
+    """
+    if reserve_candidates < 0:
+        raise ValueError("reserve_candidates must be non-negative")
+    pids = sorted(set(patient_ids)) if patient_ids is not None else discover_training_patient_ids(repo_id)
+    configs: list[dict[str, Any]] = []
+    for prefix, metal, quota in STRATIFIED_QUOTAS:
+        stratum = [pid for pid in pids if pid.startswith(prefix) and (pid in METAL_PIDS) == metal]
+        region = "Thorax" if prefix == "1THB" else "Abdomen"
+        configs.extend({"pid": pid, "region": region, "metal": metal}
+                       for pid in stratum[:quota + reserve_candidates])
+    return configs
+
+
+def discover_stratified_candidate_pool(repo_id: str, patient_ids: Iterable[str] | None = None) -> list[dict[str, Any]]:
+    """Return every sorted candidate in each stratum with its target quota.
+
+    Unlike discover_stratified_cohort(), this includes reserve candidates after
+    the nominal quota. Analysis scripts should continue down a stratum only
+    when an earlier candidate fails, and stop once the target number of valid
+    cases is reached.
+    """
+    pids = sorted(set(patient_ids)) if patient_ids is not None else discover_training_patient_ids(repo_id)
+    configs: list[dict[str, Any]] = []
+    for prefix, metal, quota in STRATIFIED_QUOTAS:
+        stratum = [pid for pid in pids if pid.startswith(prefix) and (pid in METAL_PIDS) == metal]
+        region = "Thorax" if prefix == "1THB" else "Abdomen"
+        configs.extend({"pid": pid, "region": region, "metal": metal,
+                        "target_count": quota, "candidate_rank": rank}
+                       for rank, pid in enumerate(stratum, start=1))
     return configs
 
 

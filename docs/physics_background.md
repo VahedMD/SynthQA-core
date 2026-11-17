@@ -34,24 +34,56 @@ conversion is planned as an alternative profile.
 
 ## 4. WEPL and ΔWEPL
 
-The water-equivalent path length is the ray integral of SPR:
+The image is treated as a piecewise-constant voxel field. A ray is partitioned
+at every voxel face intersected by its physical trajectory (Siddon-style
+ray–voxel traversal). For segment *i*, `SPR_i` is the SPR assigned to the
+intersected voxel and `Δs_i` is the physical length of the ray segment inside
+that voxel. The cumulative WEPL at the end of segment *k* is
 
 ```
-WEPL(z) = ∫₀ᶻ SPR(z′) dz′
+WEPL(s_k) = Σ(i=1…k) SPR_i · Δs_i
 ```
 
-Implementation:
-- **Principal axes:** `numpy.cumsum` × voxel size — O(N), exact for axis-aligned beams.
-- **Arbitrary gantry angles:** ray marching with trilinear sampling
-  (`scipy.ndimage.map_coordinates`, order 1), cumulative sum × step length.
-
-The range-relevant quantity is the *difference* between sCT and reference CT:
+For paired sCT and reference images, the same ray geometry, voxel intersections,
+and physical segment lengths are used:
 
 ```
-ΔWEPL(z) = ∫₀ᶻ [SPR_sCT − SPR_CT] dz′
+ΔWEPL(s_k) = Σ(i=1…k) (SPR_sCT,i − SPR_ref,i) · Δs_i
 ```
 
-At the distal edge, ΔWEPL is the **predicted range shift** ΔR (first order).
+The implementation computes these segment contributions directly. When a
+profile array is requested, the cumulative integral is evaluated at the
+requested positions along the ray from the exact piecewise-linear cumulative
+integral; `num_samples` therefore controls profile output locations, not the
+numerical integration resolution. Dose values may be sampled at the same
+physical positions for paired one-dimensional analysis.
+
+For principal-axis maps, WEPL is evaluated at voxel centres. The first voxel
+contributes half its thickness, and subsequent voxels contribute their full
+thickness before the centre of the current voxel is reached:
+
+```
+WEPL_voxel-centre = (cumsum(SPR) − 0.5 · SPR) · voxel_spacing
+```
+
+Array axes are `(Z,Y,X)` while spacing is `(X,Y,Z)`. The image origin denotes
+the centre of voxel `(0,0,0)`. Physical path lengths are Euclidean lengths in
+millimetres. Ray portions outside the image are retained geometrically but
+assigned SPR = 0 as a computational boundary convention; this is not a claim
+that the surrounding physical medium is vacuum. In paired ΔWEPL calculations,
+identical outside-image portions cancel.
+
+The range-relevant quantity is the difference between sCT and reference CT.
+At a reference distal-edge location, the first-order physical-depth estimate is
+
+```
+Δz_R80 ≈ −ΔWEPL(R80_ref) / SPR_ref(R80_ref)
+```
+
+This is a local linear approximation for small perturbations; finite shifts
+should be evaluated by mapping the WEPL coordinate through the reference
+profile rather than interpreting millimetres water-equivalent as millimetres
+physical depth.
 
 
 ## 5. Gradient-weighted risk (the core surrogate)
@@ -129,9 +161,10 @@ relative-local (% of local reference, masked where reference ≈ 0).
 DoseRAD2026 beams use 36 arbitrary gantry angles, so 3-D axis-aligned gradients are
 invalid. Validation therefore extracts 1-D physical profiles:
 - dose profile: trilinear sampling (`scipy.ndimage.map_coordinates`, order 1) of the 3-D
-  MC beamlet dose along `ray_source → ray_target`, 2000 samples (≈0.1 mm);
-- WEPL profile: `compute_wepl_along_ray` with the **same** sample count (mismatched
-  `num_samples` between dose and WEPL arrays is a broadcasting error, not physics);
+  MC beamlet dose along `ray_source → ray_target`, at uniformly spaced profile positions;
+- WEPL profile: exact voxel-intersection integration via `compute_wepl_along_ray`,
+  evaluated at the same profile positions. `num_samples` controls only output-profile
+  locations; it does not set the WEPL integration step or accuracy;
 - beamlet pre-selection without downloads: water range–energy fit
   `R_mm(E) ≈ 0.022 · E^1.77` matched to 0.9 × total ray WEPL, so the Bragg peak lands
   deep but inside the sampled profile;

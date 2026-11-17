@@ -1,0 +1,48 @@
+{
+  "analysis_version": "stratified_r80_shared_v3",
+  "cohort_definition": "Reconstructed deterministic expansion cohort using sorted DoseRAD training IDs, RandomState(seed=42), exclusion of the actual frozen 12-patient stratified cohort and fixed PB comparison patients, and explicit hold-out of 1THB121. First 30 patients passing the shared-v3 top-four dose-profile eligibility and evaluation procedure are included.",
+  "random_seed": 42,
+  "target_valid_n": 30,
+  "successful_n": 30,
+  "unique_successful_n": 30,
+  "held_out_patient_ids": [
+    "1THB121"
+  ],
+  "fixed_pb_ids_reserved": [
+    "1ABB006",
+    "1ABB011",
+    "1ABB020",
+    "1ABB078",
+    "1ABB138",
+    "1THB002",
+    "1THB008",
+    "1THB011",
+    "1THB016",
+    "1THB021",
+    "1THB029"
+  ],
+  "outputs": {
+    "candidate_order": "outputs\\reproducibility\\expansion_candidate_order_shared_v3_seed42.csv",
+    "case_level": "outputs\\reproducibility\\model_a_expansion_shared_v3_n30.csv",
+    "processing_log": "outputs\\reproducibility\\model_a_expansion_shared_v3_processing_log.csv",
+    "candidate_log": "outputs\\reproducibility\\model_a_expansion_shared_v3_candidate_log.csv",
+    "frozen_cohort_ids": "outputs\\reproducibility\\expansion_cohort_ids_shared_v3.csv",
+    "profiles": "outputs\\reproducibility\\r80_expansion_shared_v3_profiles"
+  },
+  "reference_type": "analytical finite WEPL remapping of the reference dose profile; not independent perturbed-image MC/PB",
+  "agreement_statistics": {
+    "n": 30,
+    "MAE_mm": 47.064968588379,
+    "MedianAE_mm": 0.4049158105849995,
+    "RMSE_mm": 248.07750465307004,
+    "Bias_FirstOrder_minus_FiniteMap_mm": -47.032784107687675,
+    "Pearson_r": 0.9288120720788842,
+    "MaximumAbsoluteError_mm": 1358.1320843181002,
+    "MedianLinearizationError_mm": 0.404915810581,
+    "MedianLinearizationRelativeError": 0.054733627238550006,
+    "MedianSPR_SCT_CV_Interval": 0.01589442831755,
+    "MaximumSPR_SCT_CV_Interval": 1.0084600668,
+    "MedianInverseVsProfileAbsoluteError_mm": 0.005696823895220001,
+    "Interpretation": "analytical finite WEPL remapping of the reference dose profile; not independent perturbed-image MC/PB"
+  }
+}

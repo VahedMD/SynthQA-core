@@ -1,0 +1,253 @@
+{
+  "patient_id": "1ABB006",
+  "analysis_version": "stratified_r80_shared_v3",
+  "benchmark_csv": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\model_a_stratified_case_level.csv",
+  "selection": {
+    "beam_idx": 2,
+    "ray_idx": 1,
+    "beamlet_idx": 1,
+    "energy_mev": 75.1442,
+    "dose_file": "proton/training/1ABB006/dose/Dose_B2_R1_L1.mha",
+    "selection_rank": 2,
+    "energy_mismatch_mm": 0.537261563275,
+    "ray_source_xyz": [
+      349.38,
+      -993.17,
+      33.99
+    ],
+    "ray_target_xyz": [
+      9.243918345561895,
+      -52.79377424949473,
+      33.99
+    ],
+    "profile_samples": 2000
+  },
+  "geometry": {
+    "ct_shape_zyx": [
+      164,
+      493,
+      498
+    ],
+    "dose_shape_zyx": [
+      164,
+      493,
+      498
+    ],
+    "ct_spacing_xyz": [
+      1.0,
+      1.0,
+      3.0
+    ],
+    "dose_spacing_xyz": [
+      1.0,
+      1.0,
+      3.0
+    ],
+    "ct_origin_xyz": [
+      -250.0,
+      -250.0,
+      -246.0
+    ],
+    "dose_origin_xyz": [
+      -250.0,
+      -250.0,
+      -246.0
+    ],
+    "ct_direction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "dose_direction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ],
+    "geometry_equal": true,
+    "dose_sampling_ray_length_mm": 999.9999999999999,
+    "sampled_profile_ray_length_mm": 999.9999999999999,
+    "profile_ray_length_matches_plan_mm": true,
+    "note": "Dose sampling uses dose-image metadata; WEPL traversal uses CT-image metadata. Both use the exact physical ray saved in the benchmark CSV."
+  },
+  "metrics": {
+    "patient_id": "1ABB006",
+    "r80_ref_mm": 993.7863964120172,
+    "r80_remapped_profile_mm": 987.7652313067686,
+    "r80_inverse_map_mm": 987.7542457918647,
+    "first_order_mm": -6.218245151245175,
+    "finite_map_mm": -6.032150620152493,
+    "remapped_profile_shift_mm": -6.021165105248656,
+    "inverse_vs_profile_mm": -0.010985514903836702,
+    "delta_wepl_r80_mm": 6.394458988018058,
+    "spr_ref_r80": 1.0283381938934326,
+    "spr_sct_r80": 1.0786784887313843,
+    "segment_index_r80": 429,
+    "t_r80": 0.9937863964120173,
+    "linearization_error_mm": 0.18609453109268248,
+    "linearization_relative_error": 0.030850445020407593,
+    "effective_spr_interval": 1.0600628848117863,
+    "effective_to_local_spr_ratio": 1.0308504450255218,
+    "interval_length_mm": 6.032150620152493,
+    "mean_spr_ref_interval": 1.0097215636397792,
+    "mean_spr_sct_interval": 1.0600618955636132,
+    "spr_ref_min_interval": 1.0003530979156494,
+    "spr_ref_max_interval": 1.0283381938934326,
+    "spr_sct_min_interval": 1.0506935119628906,
+    "spr_sct_max_interval": 1.0786784887313843,
+    "spr_ref_variation_interval": 0.02771565645969205,
+    "spr_sct_variation_interval": 0.026399379966029826
+  },
+  "benchmark_comparison": {
+    "FirstOrder_mm": {
+      "benchmark_csv": -6.21824515125,
+      "audit_recomputed": -6.218245151245175,
+      "absolute_difference": 4.82458517581108e-12,
+      "within_tolerance": true
+    },
+    "FiniteMap_mm": {
+      "benchmark_csv": -6.03215062015,
+      "audit_recomputed": -6.032150620152493,
+      "absolute_difference": 2.4922286456785514e-12,
+      "within_tolerance": true
+    },
+    "RemappedProfile_mm": {
+      "benchmark_csv": -6.02116510525,
+      "audit_recomputed": -6.021165105248656,
+      "absolute_difference": 1.3438139490062895e-12,
+      "within_tolerance": true
+    },
+    "InverseVsProfile_mm": {
+      "benchmark_csv": -0.0109855149038,
+      "audit_recomputed": -0.010985514903836702,
+      "absolute_difference": 3.670154458124131e-14,
+      "within_tolerance": true
+    },
+    "R80_ref_mm": {
+      "benchmark_csv": 993.786396412,
+      "audit_recomputed": 993.7863964120172,
+      "absolute_difference": 1.716671249596402e-11,
+      "within_tolerance": true
+    },
+    "R80_finite_map_mm": {
+      "benchmark_csv": 987.754245792,
+      "audit_recomputed": 987.7542457918647,
+      "absolute_difference": 1.3528733688872308e-10,
+      "within_tolerance": true
+    },
+    "DeltaWEPL_R80_mm": {
+      "benchmark_csv": 6.39445898802,
+      "audit_recomputed": 6.394458988018058,
+      "absolute_difference": 1.942446203884174e-12,
+      "within_tolerance": true
+    },
+    "SPR_ref_R80": {
+      "benchmark_csv": 1.02833819389,
+      "audit_recomputed": 1.0283381938934326,
+      "absolute_difference": 3.432587547536059e-12,
+      "within_tolerance": true
+    },
+    "SPR_sct_R80": {
+      "benchmark_csv": 1.07867848873,
+      "audit_recomputed": 1.0786784887313843,
+      "absolute_difference": 1.3842260671026452e-12,
+      "within_tolerance": true
+    },
+    "Linearization_Error_mm": {
+      "benchmark_csv": 0.186094531093,
+      "audit_recomputed": 0.18609453109268248,
+      "absolute_difference": 3.1752378504279477e-13,
+      "within_tolerance": true
+    },
+    "Linearization_Relative_Error": {
+      "benchmark_csv": 0.0308504450204,
+      "audit_recomputed": 0.030850445020407593,
+      "absolute_difference": 7.594619377826461e-15,
+      "within_tolerance": true
+    },
+    "Effective_SPR_interval": {
+      "benchmark_csv": 1.06006288481,
+      "audit_recomputed": 1.0600628848117863,
+      "absolute_difference": 1.7863488466218769e-12,
+      "within_tolerance": true
+    },
+    "Effective_to_Local_SPR_Ratio": {
+      "benchmark_csv": 1.03085044503,
+      "audit_recomputed": 1.0308504450255218,
+      "absolute_difference": 4.4781955921280314e-12,
+      "within_tolerance": true
+    },
+    "interval_length_mm": {
+      "benchmark_csv": 6.03215062015,
+      "audit_recomputed": 6.032150620152493,
+      "absolute_difference": 2.4922286456785514e-12,
+      "within_tolerance": true
+    },
+    "mean_spr_ref_interval": {
+      "benchmark_csv": 1.00972156364,
+      "audit_recomputed": 1.0097215636397792,
+      "absolute_difference": 2.2093438190040615e-13,
+      "within_tolerance": true
+    },
+    "mean_spr_sct_interval": {
+      "benchmark_csv": 1.06006189556,
+      "audit_recomputed": 1.0600618955636132,
+      "absolute_difference": 3.6131098113401094e-12,
+      "within_tolerance": true
+    },
+    "spr_ref_min_interval": {
+      "benchmark_csv": 1.00035309792,
+      "audit_recomputed": 1.0003530979156494,
+      "absolute_difference": 4.3505199442961384e-12,
+      "within_tolerance": true
+    },
+    "spr_ref_max_interval": {
+      "benchmark_csv": 1.02833819389,
+      "audit_recomputed": 1.0283381938934326,
+      "absolute_difference": 3.432587547536059e-12,
+      "within_tolerance": true
+    },
+    "spr_sct_min_interval": {
+      "benchmark_csv": 1.05069351196,
+      "audit_recomputed": 1.0506935119628906,
+      "absolute_difference": 2.8905766669140576e-12,
+      "within_tolerance": true
+    },
+    "spr_sct_max_interval": {
+      "benchmark_csv": 1.07867848873,
+      "audit_recomputed": 1.0786784887313843,
+      "absolute_difference": 1.3842260671026452e-12,
+      "within_tolerance": true
+    },
+    "spr_ref_variation_interval": {
+      "benchmark_csv": 0.0277156564597,
+      "audit_recomputed": 0.02771565645969205,
+      "absolute_difference": 7.94850296692573e-15,
+      "within_tolerance": true
+    },
+    "spr_sct_variation_interval": {
+      "benchmark_csv": 0.026399379966,
+      "audit_recomputed": 0.026399379966029826,
+      "absolute_difference": 2.982683544594522e-14,
+      "within_tolerance": true
+    }
+  },
+  "comparison_absolute_tolerance": 1e-06,
+  "benchmark_reproduction_passed": true,
+  "outputs": {
+    "profile_csv": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB006_shared_v3_profile.csv",
+    "voxel_segments_csv": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB006_shared_v3_voxel_segments.csv"
+  },
+  "interpretation": "The audit recomputed the exact beamlet recorded in the shared-v3 benchmark CSV, validated its beam/ray/beamlet identifiers, energy, dose file, and ray coordinates against the plan, and used the same shared R80 calculation function. FiniteMap and RemappedProfile remain analytical WEPL remapping, not independent perturbed-image MC/PB."
+}

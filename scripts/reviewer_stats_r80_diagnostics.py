@@ -16,9 +16,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
-from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from synthqa_core.surrogates.wepl import compute_wepl_along_ray, sample_volume_at_ray_positions
 from cohort_manifest import (new_run, base_record, append_manifest_rows, patient_metadata,
-                             discover_training_patient_ids, discover_stratified_cohort)
+                             discover_training_patient_ids, discover_stratified_cohort, discover_stratified_reservation_pool)
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
 
@@ -83,12 +83,13 @@ def bootstrap_ci(x, y, n_boot=10000, alpha=0.05, seed=42):
         "bias_convention": "surrogate_minus_reference"
     }
 
-def extract_1d_ray_profile(vol, sp, org, rs, rt, n=2000):
-    from scipy.ndimage import map_coordinates
-    t = np.linspace(0, 1, n)
-    p = rs[None, :] + t[:, None] * (rt - rs)[None, :]
-    ix, iy, iz = ((p[:,0]-org[0])/sp[0], (p[:,1]-org[1])/sp[1], (p[:,2]-org[2])/sp[2])
-    return map_coordinates(vol, np.array([iz, iy, ix]), order=1, mode='constant', cval=0.0), np.linalg.norm(rt - rs)
+def extract_1d_ray_profile(vol, sp, org, rs, rt, num_samples=2000, direction=None):
+    prof, distances = sample_volume_at_ray_positions(
+        vol, sp, org, rs, rt, num_samples=num_samples, direction=direction
+    )
+    dist = float(distances[-1])
+    return prof, dist, dist/(num_samples-1)
+
 
 def find_r80(dose, depth):
     pk = np.argmax(dose)
@@ -208,7 +209,8 @@ def run_cohort_expansion(n_patients=30, run=None):
 
     # Explicit disjointness policy: reserve every candidate in the stratified
     # cohorts (including patients that later fail) and the fixed PB comparison.
-    stratified_candidates = {x["pid"] for x in discover_stratified_cohort(REPO_ID, patient_ids=pids)}
+    stratified_candidates = {x["pid"] for x in discover_stratified_reservation_pool(
+        REPO_ID, patient_ids=pids, reserve_candidates=1)}
     fixed_comparison = set(pb_data["Patient"].astype(str))
     reserved = stratified_candidates | fixed_comparison
     overlap_in_dataset = sorted(set(pids) & reserved)
@@ -268,7 +270,7 @@ def run_cohort_expansion(n_patients=30, run=None):
             continue
         try:
             ct = load_mha(ct_p)
-            ct_arr, sp, org = ct["array"], ct["spacing_xyz"], ct["origin_xyz"]
+            ct_arr, sp, org, direction = ct["array"], ct["spacing_xyz"], ct["origin_xyz"], ct["direction"]
             spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
             spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr + 50.0))
             with open(plan_p, encoding="utf-8") as f:
@@ -284,7 +286,7 @@ def run_cohort_expansion(n_patients=30, run=None):
             for r in b.get("rays", [])[:5]:
                 row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
-                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
+                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400, direction=direction)
                 if w[-1] < 10.0:
                     row["rays_rejected_short_wepl"] += 1
                     continue
@@ -296,13 +298,13 @@ def run_cohort_expansion(n_patients=30, run=None):
                     row["dose_download_failures"] += 1
                     row.setdefault("_dose_errors", []).append(str(exc)[:200])
                     continue
-                d1, dist = extract_1d_ray_profile(d3, sp, org, rs, rt)
+                d1, dist = extract_1d_ray_profile(d3, sp, org, rs, rt, direction=direction)
                 pk = np.argmax(d1)
                 if not (pk > 0.2*len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1*d1[pk]):
                     row["invalid_dose_profiles"] += 1
                     continue
-                w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000)
-                w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000)
+                w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000, direction=direction)
+                w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000, direction=direction)
                 if len(w_ref) != len(d1) or len(w_sct) != len(d1):
                     row["invalid_dose_profiles"] += 1
                     row.setdefault("_dose_errors", []).append(
@@ -391,7 +393,7 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
     ct_p = hf_hub_download(REPO_ID, f"proton/training/{pid}/image/ct.mha", repo_type="dataset")
 
     ct = load_mha(ct_p)
-    ct_arr, sp, org = ct["array"], np.asarray(ct["spacing_xyz"], dtype=float), np.asarray(ct["origin_xyz"], dtype=float)
+    ct_arr, sp, org, direction = ct["array"], np.asarray(ct["spacing_xyz"], dtype=float), np.asarray(ct["origin_xyz"], dtype=float), ct["direction"]
     spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
     spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr + 50.0))
     with open(plan_p, encoding="utf-8") as f:
@@ -404,7 +406,7 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
         for r in b.get("rays", [])[:5]:
             rays_examined += 1
             rs, rt = np.asarray(r["ray_source"], dtype=float), np.asarray(r["ray_target"], dtype=float)
-            w_short = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
+            w_short = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400, direction=direction)
             if w_short[-1] < 10.0:
                 continue
             fp = f"proton/training/{pid}/dose/Dose_B{b['beam_idx']}_R{r['ray_idx']}_L0.mha"
@@ -416,7 +418,7 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
                 continue
 
             d3 = dose_img["array"]
-            d1, dist = extract_1d_ray_profile(d3, sp, org, rs, rt)
+            d1, dist = extract_1d_ray_profile(d3, sp, org, rs, rt, direction=direction)
             pk = int(np.argmax(d1))
             if not (pk > 0.2 * len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1 * d1[pk]):
                 continue
@@ -433,8 +435,8 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
 
     rs, rt = selected["ray_source"], selected["ray_target"]
     d1, dist, pk = selected["dose_profile"], selected["distance_mm"], selected["peak_index"]
-    w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000)
-    w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000)
+    w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000, direction=direction)
+    w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000, direction=direction)
     if len(w_ref) != len(d1):
         raise ValueError(f"WEPL profile length {len(w_ref)} differs from dose profile length {len(d1)}")
     dwepl = w_sct - w_ref
@@ -526,9 +528,9 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
     falloff.to_csv(output_root / "r80_falloff_diagnostic.csv", index=False)
     pd.DataFrame({"wepl_sample_index": np.arange(len(w_ref)), "depth_mm": depth,
                   "wepl_reference": w_ref, "wepl_perturbed": w_sct, "dwepl": dwepl,
-                  "hu": extract_1d_ray_profile(ct_arr, sp, org, rs, rt)[0],
-                  "spr_reference": extract_1d_ray_profile(spr_ref, sp, org, rs, rt)[0],
-                  "spr_perturbed": extract_1d_ray_profile(spr_sct, sp, org, rs, rt)[0]}).to_csv(
+                  "hu": extract_1d_ray_profile(ct_arr, sp, org, rs, rt, direction=direction)[0],
+                  "spr_reference": extract_1d_ray_profile(spr_ref, sp, org, rs, rt, direction=direction)[0],
+                  "spr_perturbed": extract_1d_ray_profile(spr_sct, sp, org, rs, rt, direction=direction)[0]}).to_csv(
         output_root / "wepl_profiles.csv", index=False)
 
     # Dose profiles with both R80 landmarks.
@@ -572,9 +574,9 @@ def diagnose_patient(patient_id="1THB121", output_root=None):
     ax.set_title(f"{pid}: transverse CT section at y={y_coords[iy]:.2f} mm"); ax.legend(); fig.tight_layout()
     fig.savefig(output_root / "beam_peak_transverse_ct.png", dpi=180); plt.close(fig)
 
-    hu_ray = extract_1d_ray_profile(ct_arr, sp, org, rs, rt)[0]
-    spr_ref_ray = extract_1d_ray_profile(spr_ref, sp, org, rs, rt)[0]
-    spr_sct_ray = extract_1d_ray_profile(spr_sct, sp, org, rs, rt)[0]
+    hu_ray = extract_1d_ray_profile(ct_arr, sp, org, rs, rt, direction=direction)[0]
+    spr_ref_ray = extract_1d_ray_profile(spr_ref, sp, org, rs, rt, direction=direction)[0]
+    spr_sct_ray = extract_1d_ray_profile(spr_sct, sp, org, rs, rt, direction=direction)[0]
     ray_depth = np.linspace(0.0, dist, len(hu_ray))
     fig, axes = plt.subplots(3, 1, figsize=(11, 10), sharex=True)
     axes[0].plot(ray_depth, hu_ray); axes[0].set_ylabel("HU")

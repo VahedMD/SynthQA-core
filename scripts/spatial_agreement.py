@@ -10,6 +10,7 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from synthqa_core.calibration.profiles import CalibrationProfile
+from synthqa_core.surrogates.wepl import compute_wepl_along_axis
 
 def dice(a, b):
     s = np.sum(a) + np.sum(b)
@@ -90,7 +91,7 @@ def test_phantom():
     
     delta_spr = spr_sct - spr_ref
     # WEPL is cumulative sum along Z (axis 0). It will be NEGATIVE after the bone.
-    delta_wepl = np.cumsum(delta_spr, axis=0) * spacing[0]
+    delta_wepl = compute_wepl_along_axis(delta_spr, spacing, axis=0)
     
     # Risk map = |ΔWEPL| * |∂D/∂z|
     grad = np.abs(np.gradient(dose_ref, spacing[0], axis=0))

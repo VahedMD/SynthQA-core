@@ -17,4 +17,4 @@ def compute_delta_wepl_along_axis(delta_spr: np.ndarray, spacing_xyz: tuple, axi
     """
     spacing_map = {0: spacing_xyz[2], 1: spacing_xyz[1], 2: spacing_xyz[0]}
     voxel_size = spacing_map[axis]
-    return np.cumsum(delta_spr, axis=axis) * voxel_size
+    return (np.cumsum(delta_spr, axis=axis) - 0.5 * delta_spr) * voxel_size

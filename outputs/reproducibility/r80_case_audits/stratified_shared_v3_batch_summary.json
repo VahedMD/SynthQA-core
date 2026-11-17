@@ -1,0 +1,113 @@
+{
+  "benchmark_csv": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\model_a_stratified_case_level.csv",
+  "output_dir": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits",
+  "comparison_atol": 1e-06,
+  "patients_requested": 11,
+  "patients_passed": 11,
+  "patients_mismatched": 0,
+  "patients_errored": 0,
+  "explicitly_skipped": [
+    "1THB002"
+  ],
+  "results": [
+    {
+      "Patient": "1THB021",
+      "Status": "PASS",
+      "Elapsed_s": 15.267775199987227,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB021_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB021_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB021_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1THB029",
+      "Status": "PASS",
+      "Elapsed_s": 10.486356299981708,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB029_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB029_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB029_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1THB052",
+      "Status": "PASS",
+      "Elapsed_s": 7.400172199995723,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB052_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB052_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB052_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1THB008",
+      "Status": "PASS",
+      "Elapsed_s": 5.355693899997277,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB008_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB008_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB008_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1THB011",
+      "Status": "PASS",
+      "Elapsed_s": 5.359631800005445,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB011_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB011_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1THB011_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB078",
+      "Status": "PASS",
+      "Elapsed_s": 4.909048199973768,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB078_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB078_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB078_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB138",
+      "Status": "PASS",
+      "Elapsed_s": 3.752585900016129,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB138_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB138_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB138_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB006",
+      "Status": "PASS",
+      "Elapsed_s": 5.789472099975683,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB006_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB006_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB006_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB011",
+      "Status": "PASS",
+      "Elapsed_s": 3.7530206000083126,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB011_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB011_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB011_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB020",
+      "Status": "PASS",
+      "Elapsed_s": 3.9262648000149056,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB020_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB020_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB020_shared_v3_voxel_segments.csv"
+    },
+    {
+      "Patient": "1ABB021",
+      "Status": "PASS",
+      "Elapsed_s": 4.179263199999696,
+      "Error": "",
+      "Audit_JSON": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB021_shared_v3_audit.json",
+      "Profile_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB021_shared_v3_profile.csv",
+      "Voxel_Segments_CSV": "D:\\Projects\\Macau\\SynthQA_V2\\outputs\\reproducibility\\r80_case_audits\\1ABB021_shared_v3_voxel_segments.csv"
+    }
+  ]
+}

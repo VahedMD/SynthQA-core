@@ -20,7 +20,7 @@
   `HF_HUB_DISABLE_SYMLINKS_WARNING=1` (script does this automatically).
 
 ## Beamlet pre-selection (avoids blind downloads)
-1. Compute ray WEPL cheaply (400 samples) for candidate rays.
+1. Compute voxel-intersection WEPL for candidate rays and evaluate it at 400 profile positions.
 2. Predict water range per beamlet energy: `R_mm ≈ 0.022 · E^1.77`.
 3. Rank beamlets by |R(E) − 0.9 · ray WEPL| (peak deep but inside profile).
 4. Accept only profiles with peak index > 20% of samples, peak > 1e-3, and > 90% distal
@@ -53,3 +53,17 @@
   `benchmark_dataset.py`.
 - Grow the cohort: raise `n_patients` in `reviewer_stats.run_cohort_expansion` and widen
   the candidate search (more beams/rays/energy layers).
+
+## Range-shift endpoint consistency
+
+For the global-HU-bias benchmark, the first-order surrogate prediction and the
+reference displacement must use the same distal R80 endpoint. The predicted
+shift is evaluated at the reference R80 location using
+
+\[\Delta z_{R80}\approx-\Delta\mathrm{WEPL}(R80_{\mathrm{ref}})/
+\mathrm{SPR}_{\mathrm{ref}}(R80_{\mathrm{ref}}).\]
+
+The reference displacement is obtained from the R80 of the WEPL-remapped dose
+profile minus the R80 of the original reference profile. A peak-based WEPL
+shift is not an R80 prediction and must not be compared with an R80 reference.
+Bias is reported as prediction minus reference throughout.

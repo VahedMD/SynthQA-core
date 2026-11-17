@@ -16,9 +16,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
-from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from synthqa_core.surrogates.wepl import compute_wepl_along_ray, compute_delta_wepl_along_ray, sample_volume_at_ray_positions
+from synthqa_core.surrogates.range_mapping import inverse_monotone_profile, interval_spr_diagnostics
 from cohort_manifest import (new_run, base_record, append_manifest_rows, patient_metadata,
-                             discover_training_patient_ids, discover_stratified_cohort)
+                             discover_training_patient_ids, discover_stratified_cohort, discover_stratified_reservation_pool)
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
 
@@ -83,12 +84,13 @@ def bootstrap_ci(x, y, n_boot=10000, alpha=0.05, seed=42):
         "bias_convention": "surrogate_minus_reference"
     }
 
-def extract_1d_ray_profile(vol, sp, org, rs, rt, n=2000):
-    from scipy.ndimage import map_coordinates
-    t = np.linspace(0, 1, n)
-    p = rs[None, :] + t[:, None] * (rt - rs)[None, :]
-    ix, iy, iz = ((p[:,0]-org[0])/sp[0], (p[:,1]-org[1])/sp[1], (p[:,2]-org[2])/sp[2])
-    return map_coordinates(vol, np.array([iz, iy, ix]), order=1, mode='constant', cval=0.0), np.linalg.norm(rt - rs)
+def extract_1d_ray_profile(vol, sp, org, rs, rt, num_samples=2000, direction=None):
+    prof, distances = sample_volume_at_ray_positions(
+        vol, sp, org, rs, rt, num_samples=num_samples, direction=direction
+    )
+    dist = float(distances[-1])
+    return prof, dist, dist/(num_samples-1)
+
 
 def find_r80(dose, depth):
     pk = np.argmax(dose)
@@ -102,7 +104,7 @@ def find_r80(dose, depth):
         if y1 != y2: return depth[i-1] + (thr - y1) * (depth[i] - depth[i-1]) / (y2 - y1)
     return depth[i]
 
-def run_cohort_expansion(n_patients=30, run=None):
+def run_cohort_expansion(n_patients=30, run=None, fixed_patient_ids=None):
     """Collect n_patients VALID Model A cases, not merely n_patients attempts.
 
     The expansion arm is kept disjoint from the fixed reviewer comparison and
@@ -110,19 +112,53 @@ def run_cohort_expansion(n_patients=30, run=None):
     are traversed in a seeded random permutation until the valid-case target is
     reached or the eligible pool is exhausted.
     """
-    print("\n--- COHORT EXPANSION: Surrogate vs Analytical MC Shift ---")
+    print("\n--- COHORT EXPANSION: First-order vs Finite WEPL Mapping ---")
     print(f"Target: {n_patients} valid patients (not {n_patients} initial attempts)")
     run = run or new_run(__file__)
     prof = CalibrationProfile()
-    pids = discover_training_patient_ids(REPO_ID)
-    if not pids:
-        raise RuntimeError("No patient IDs found in proton/training; cannot run expansion cohort.")
-
-    # Explicit disjointness policy: reserve every candidate in the stratified
-    # cohorts (including patients that later fail) and the fixed PB comparison.
-    stratified_candidates = {x["pid"] for x in discover_stratified_cohort(REPO_ID, patient_ids=pids)}
     fixed_comparison = set(pb_data["Patient"].astype(str))
-    reserved = stratified_candidates | fixed_comparison
+
+    if fixed_patient_ids is not None:
+        # Frozen rebenchmarking must preserve the historical expansion cohort.
+        # Validate disjointness against the *actually executed* stratified cohort,
+        # not the current fallback reservation pool. A fallback candidate that
+        # was never used (e.g. 1ABB030) must not retroactively invalidate a
+        # previously frozen expansion cohort. The frozen stratified IDs are
+        # stored locally beside the benchmark script, avoiding a full HF listing.
+        stratified_file = os.path.join(os.path.dirname(__file__), "stratified_candidate_patient_ids.txt")
+        if not os.path.isfile(stratified_file):
+            raise FileNotFoundError(
+                "Frozen stratified cohort ID file is required for expansion rebenchmarking: "
+                f"{stratified_file}"
+            )
+        with open(stratified_file, encoding="utf-8") as f:
+            actual_stratified = {line.strip() for line in f
+                                 if line.strip() and not line.lstrip().startswith("#")}
+        pids = [str(x) for x in fixed_patient_ids]
+        if not pids:
+            raise ValueError("fixed_patient_ids is empty")
+        if len(pids) != len(set(pids)):
+            raise ValueError("fixed_patient_ids contains duplicates")
+        reserved = actual_stratified | fixed_comparison
+        overlap_ids = sorted(set(pids) & reserved)
+        if overlap_ids:
+            raise ValueError(
+                "Frozen expansion cohort overlaps the executed stratified/PB cohort: "
+                f"{overlap_ids}"
+            )
+        print("Using frozen expansion IDs; no full Hugging Face repository listing required.")
+        print(f"Disjointness checked against {len(actual_stratified)} executed stratified IDs "
+              f"and {len(fixed_comparison)} fixed PB-comparison IDs.")
+    else:
+        pids = discover_training_patient_ids(REPO_ID)
+        if not pids:
+            raise RuntimeError("No patient IDs found in proton/training; cannot run expansion cohort.")
+        # For new cohort selection, reserve nominal stratified candidates plus
+        # one fallback per stratum, as before, to preserve future replacement capacity.
+        stratified_candidates = {x["pid"] for x in discover_stratified_reservation_pool(
+            REPO_ID, patient_ids=pids, reserve_candidates=1)}
+        reserved = stratified_candidates | fixed_comparison
+
     overlap_in_dataset = sorted(set(pids) & reserved)
     eligible_pool = [pid for pid in pids if pid not in reserved]
 
@@ -142,8 +178,13 @@ def run_cohort_expansion(n_patients=30, run=None):
                         "metal_status_source": meta["metal_status_source"]})
         manifest_rows.append(row)
 
-    rng = np.random.RandomState(42)
-    candidate_order = list(rng.permutation(eligible_pool))
+    if fixed_patient_ids is not None:
+        candidate_order = [str(x) for x in fixed_patient_ids]
+        n_patients = len(candidate_order)
+        print(f"Using frozen patient order: {n_patients} IDs; no reselection")
+    else:
+        rng = np.random.RandomState(42)
+        candidate_order = list(rng.permutation(eligible_pool))
     results = []
     attempts = 0
     for selection_order, pid in enumerate(candidate_order, start=1):
@@ -153,8 +194,10 @@ def run_cohort_expansion(n_patients=30, run=None):
         meta = patient_metadata(pid)
         row = base_record(run, "model_a_expansion", str(pid),
             anatomical_region=meta["anatomical_region"], metal_status=meta["metal_status"],
-            selection_method=(f"RandomState(seed=42) permutation of eligible pool; iterate until "
-                             f"{n_patients} valid patients or pool exhaustion; disjoint from reserved cohorts"),
+            selection_method=(f"Frozen patient order supplied by caller; target {n_patients}; disjoint from reserved cohorts"
+                             if fixed_patient_ids is not None else
+                             (f"RandomState(seed=42) permutation of eligible pool; iterate until "
+                              f"{n_patients} valid patients or pool exhaustion; disjoint from reserved cohorts")),
             perturbation_model="Model A: global HU bias", perturbation_threshold_hu="",
             perturbation_delta_hu=50, candidate_rays_examined=0, candidate_beamlets_examined=0,
             rays_rejected_short_wepl=0, dose_download_failures=0,
@@ -166,7 +209,8 @@ def run_cohort_expansion(n_patients=30, run=None):
                         "eligible_candidate_pool_size": len(eligible_pool),
                         "target_valid_n": n_patients,
                         "valid_n_before_this_patient": len(results),
-                        "random_seed": 42,
+                        "random_seed": None if fixed_patient_ids is not None else 42,
+                        "frozen_patient_order": fixed_patient_ids is not None,
                         "anatomical_region_source": meta["anatomical_region_source"],
                         "metal_status_source": meta["metal_status_source"],
                         "dose_reference": "analytical reconstruction from reference dose; not fresh perturbed-image MC"})
@@ -180,7 +224,7 @@ def run_cohort_expansion(n_patients=30, run=None):
             continue
         try:
             ct = load_mha(ct_p)
-            ct_arr, sp, org = ct["array"], ct["spacing_xyz"], ct["origin_xyz"]
+            ct_arr, sp, org, direction = ct["array"], ct["spacing_xyz"], ct["origin_xyz"], ct["direction"]
             spr_ref = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr))
             spr_sct = prof.density_to_spr.convert(prof.hu_to_density.convert(ct_arr + 50.0))
             with open(plan_p, encoding="utf-8") as f:
@@ -196,7 +240,7 @@ def run_cohort_expansion(n_patients=30, run=None):
             for r in b.get("rays", [])[:5]:
                 row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
-                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
+                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400, direction=direction)
                 if w[-1] < 10.0:
                     row["rays_rejected_short_wepl"] += 1
                     continue
@@ -208,26 +252,59 @@ def run_cohort_expansion(n_patients=30, run=None):
                     row["dose_download_failures"] += 1
                     row.setdefault("_dose_errors", []).append(str(exc)[:200])
                     continue
-                d1, dist = extract_1d_ray_profile(d3, sp, org, rs, rt)
+                d1, dist, _ = extract_1d_ray_profile(d3, sp, org, rs, rt, direction=direction)
                 pk = np.argmax(d1)
                 if not (pk > 0.2*len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1*d1[pk]):
                     row["invalid_dose_profiles"] += 1
                     continue
-                w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000)
-                w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000)
-                dwepl = w_sct - w_ref
+                paired = compute_delta_wepl_along_ray(
+                    spr_ref, spr_sct, sp, org, rs, rt, direction=direction, num_samples=len(d1)
+                )
+                w_ref = paired["wepl_ref_samples_mm"]
+                w_sct = paired["wepl_sct_samples_mm"]
+                dwepl = paired["delta_wepl_samples_mm"]
                 depth = np.arange(len(d1)) * (dist / (len(d1)-1))
-                d_sct = np.interp(w_ref + dwepl, w_ref, d1, left=0.0, right=0.0)
-                pred_mm = float(-dwepl[pk])
-                act_mm = float(find_r80(d_sct, depth) - find_r80(d1, depth))
-                results.append({"Patient": pid, "Pred_mm": pred_mm, "Act_mm": act_mm,
-                                "Region": meta["anatomical_region"], "Metal": meta["metal_status"]})
+                unique_w, unique_idx = np.unique(w_ref, return_index=True)
+                d_sct = np.interp(w_sct, unique_w, d1[unique_idx], left=0.0, right=0.0)
+                r80_ref = find_r80(d1, depth)
+                if not np.isfinite(r80_ref):
+                    row.update(outcome_status="excluded", exclusion_reason="invalid_reference_R80")
+                    manifest_rows.append(row)
+                    found = True
+                    break
+                ray_len = float(paired["ray_length_mm"])
+                t_r80 = np.clip(r80_ref / ray_len, 0.0, 1.0)
+                seg_r80 = int(np.searchsorted(paired["t_edges"], t_r80, side="right") - 1)
+                seg_r80 = int(np.clip(seg_r80, 0, len(paired["delta_spr_segments"])-1))
+                before_delta = np.concatenate(([0.0], np.cumsum(paired["delta_wepl_contributions_mm"])[:-1]))
+                delta_wepl_r80 = (before_delta[seg_r80] + paired["delta_spr_segments"][seg_r80] *
+                                  (t_r80 - paired["t_edges"][seg_r80]) * ray_len)
+                spr_ref_r80 = paired["spr_ref_segments"][seg_r80]
+                first_order_mm = float(-delta_wepl_r80 / spr_ref_r80) if spr_ref_r80 > 0 else np.nan
+                target_wepl = float(np.interp(r80_ref, depth, w_ref))
+                mapped_r80 = inverse_monotone_profile(w_sct, depth, target_wepl)
+                finite_map_mm = float(mapped_r80 - r80_ref) if np.isfinite(mapped_r80) else np.nan
+                remapped_r80 = find_r80(d_sct, depth)
+                remapped_profile_mm = float(remapped_r80-r80_ref) if np.isfinite(remapped_r80) else np.nan
+                consistency_mm = float(mapped_r80-remapped_r80) if np.isfinite(mapped_r80) and np.isfinite(remapped_r80) else np.nan
+                lin_error = abs(first_order_mm-finite_map_mm) if np.isfinite(first_order_mm) and np.isfinite(finite_map_mm) else np.nan
+                lin_rel_error = lin_error/(abs(finite_map_mm)+1e-9) if np.isfinite(lin_error) else np.nan
+                interval_diag = interval_spr_diagnostics(paired, mapped_r80, r80_ref) if np.isfinite(mapped_r80) else {}
+                results.append({"Patient": pid, "FirstOrder_mm": first_order_mm, "FiniteMap_mm": finite_map_mm,
+                                "RemappedProfile_mm": remapped_profile_mm, "InverseVsProfile_mm": consistency_mm,
+                                "DeltaWEPL_R80_mm": float(delta_wepl_r80), "SPR_ref_R80": float(spr_ref_r80),
+                                "SPR_sct_R80": float(paired["spr_sct_segments"][seg_r80]),
+                                "Linearization_Error_mm": lin_error, "Linearization_Relative_Error": lin_rel_error,
+                                **interval_diag, "Region": meta["anatomical_region"], "Metal": meta["metal_status"]})
                 row.update(eligible_rays=1, selected_beam_idx=b.get("beam_idx", ""),
                     selected_ray_idx=r.get("ray_idx", ""), selected_beamlet_idx=0,
-                    outcome_status="included", exclusion_reason="", surrogate_shift_mm=pred_mm,
-                    reference_shift_mm=act_mm,
+                    outcome_status="included", exclusion_reason="", surrogate_shift_mm=first_order_mm,
+                    reference_shift_mm=finite_map_mm,
                     notes_json={**row["notes_json"], "ray_source": rs.tolist(), "ray_target": rt.tolist(),
-                                "reference_type": "analytical reconstructed dose shift", "dose_file": fp,
+                                "reference_type": "finite WEPL-mapped reconstruction from reference dose; not independent dose recalculation", "dose_file": fp,
+                                "linearization_error_mm": None if not np.isfinite(lin_error) else float(lin_error),
+                                "linearization_relative_error": None if not np.isfinite(lin_rel_error) else float(lin_rel_error),
+                                "finite_mapping_diagnostics": {k: (None if not np.isfinite(v) else float(v)) for k, v in interval_diag.items()},
                                 "dose_download_errors": row.pop("_dose_errors", []),
                                 "eligible_rays_semantics": "selected valid ray used by analysis; search stops after first valid ray"})
                 found = True
@@ -330,7 +407,9 @@ def main():
             "Refreshed expansion CSV not found. Expected one of: " + ", ".join(refreshed_candidates)
         )
     df_c = pd.read_csv(refreshed_path)
-    required = {"Patient", "Pred_mm", "Act_mm", "Region", "Metal"}
+    has_dual_estimators = {"FirstOrder_mm", "FiniteMap_mm"}.issubset(df_c.columns)
+    x_col, y_col = (("FirstOrder_mm", "FiniteMap_mm") if has_dual_estimators else ("Pred_mm", "Act_mm"))
+    required = {"Patient", x_col, y_col, "Region", "Metal"}
     missing = required - set(df_c.columns)
     if missing:
         raise ValueError(f"Refreshed expansion CSV is missing required columns: {sorted(missing)}")
@@ -342,7 +421,7 @@ def main():
         raise ValueError("Expected replacement patient 1ABB143 is missing from the refreshed cohort.")
     print(f"\n[3] Loaded frozen refreshed expansion cohort: {refreshed_path}")
     if len(df_c) > 5:
-        x_c, y_c = df_c["Pred_mm"].values, df_c["Act_mm"].values
+        x_c, y_c = df_c[x_col].values, df_c[y_col].values
         ci_c = bootstrap_ci(x_c, y_c, seed=42)
         r_c = np.corrcoef(x_c, y_c)[0, 1]
         print(f"\n[3] Cohort Expansion (n={len(df_c)}): r = {r_c:.3f} "
@@ -352,7 +431,7 @@ def main():
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.plot(lims, lims, 'k--', alpha=0.5)
         ax.scatter(x_c, y_c, s=60, c='green', edgecolors='k', alpha=0.7)
-        ax.set_xlabel("Surrogate predicted shift (mm)"); ax.set_ylabel("Analytically reconstructed reference shift (mm)")
+        ax.set_xlabel("First-order local shift (mm)" if has_dual_estimators else "Legacy predicted shift (mm)"); ax.set_ylabel("Finite WEPL-mapped shift (mm)" if has_dual_estimators else "Legacy analytically reconstructed shift (mm)")
         ax.set_title(f"Refreshed expansion cohort (n={len(df_c)}): r = {r_c:.3f}"); ax.grid(ls='--', alpha=0.5)
         fig.tight_layout(); fig.savefig("figures/Fig11_CohortExpansion.png", dpi=300); plt.close(fig)
 

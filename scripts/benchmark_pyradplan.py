@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 
 from synthqa_core.io.image_loader import load_mha
 from synthqa_core.calibration.profiles import CalibrationProfile
-from synthqa_core.surrogates.wepl import compute_wepl_along_ray
+from synthqa_core.surrogates.wepl import compute_wepl_along_ray, sample_volume_at_ray_positions
 from cohort_manifest import new_run, base_record, append_manifest_rows, discover_stratified_cohort
 
 REPO_ID = "LMUK-RADONC-PHYS-RES/DoseRAD2026"
@@ -54,13 +54,12 @@ def discover_patients():
     """Use the shared deterministic stratified-cohort definition."""
     return discover_stratified_cohort(REPO_ID)
 
-def ray_profile(vol, sp, org, rs, rt, n=2000):
-    from scipy.ndimage import map_coordinates
-    t = np.linspace(0, 1, n)
-    p = rs[None, :] + t[:, None] * (rt - rs)[None, :]
-    ix, iy, iz = ((p[:,0]-org[0])/sp[0], (p[:,1]-org[1])/sp[1], (p[:,2]-org[2])/sp[2])
-    prof = map_coordinates(vol, np.array([iz, iy, ix]), order=1, mode='constant', cval=0.0)
-    return prof, np.linalg.norm(rt - rs)
+def ray_profile(vol, sp, org, rs, rt, n=2000, direction=None):
+    prof, distances = sample_volume_at_ray_positions(
+        vol, sp, org, rs, rt, num_samples=n, direction=direction
+    )
+    return prof, float(distances[-1])
+
 
 def find_r80(dose, depth):
     pk = np.argmax(dose)
@@ -110,7 +109,7 @@ def run_pb_dose(ct_path, b, bl, energy, machine, machine_energies):
         ms = (time.perf_counter() - t0) * 1000
 
     d = res["physical_dose"]
-    return sitk.GetArrayFromImage(d), d.GetSpacing(), d.GetOrigin(), ms
+    return sitk.GetArrayFromImage(d), d.GetSpacing(), d.GetOrigin(), d.GetDirection(), ms
 
 def run():
     run_meta = new_run(__file__)
@@ -168,12 +167,12 @@ def run():
             for r in b["rays"]:
                 row["candidate_rays_examined"] += 1
                 rs, rt = np.array(r["ray_source"]), np.array(r["ray_target"])
-                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400)
+                w = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=400, direction=direction)
                 if w[-1] < 10.0:
                     row["rays_rejected_short_wepl"] += 1
                     continue
                 dist = np.linalg.norm(rt - rs)
-                ct1, _ = ray_profile(ct_arr, sp, org, rs, rt, n=400)
+                ct1, _ = ray_profile(ct_arr, sp, org, rs, rt, n=400, direction=direction)
                 bone_mm = dist * np.mean(ct1 > BONE_THRESH)
                 for bl in r["beamlets"]:
                     row["candidate_beamlets_examined"] += 1
@@ -193,12 +192,12 @@ def run():
 
             # --- 1) pyRadPlan on reference CT (timed) ---
             try:
-                pb_ref_arr, pb_sp, pb_org, ms_ref = run_pb_dose(ct_p, b, blx, energy, machine, machine_energies)
+                pb_ref_arr, pb_sp, pb_org, pb_direction, ms_ref = run_pb_dose(ct_p, b, blx, energy, machine, machine_energies)
             except Exception as e:
                 row["dose_engine_failures"] += 1
                 print(f"\n  [PB ERROR ref] {e}"); traceback.print_exc(); continue
 
-            d1, dist = ray_profile(pb_ref_arr, pb_sp, pb_org, rs, rt)
+            d1, dist = ray_profile(pb_ref_arr, pb_sp, pb_org, rs, rt, direction=pb_direction)
             pk = np.argmax(d1)
             if not (pk > 0.2 * len(d1) and d1[pk] > 1e-3 and d1[pk:].min() < 0.1 * d1[pk]):
                 row["invalid_dose_profiles"] += 1
@@ -206,19 +205,19 @@ def run():
 
             # --- 2) pyRadPlan on perturbed sCT (timed) ---
             try:
-                pb_sct_arr, _, _, ms_sct = run_pb_dose(tmp_sct, b, blx, energy, machine, machine_energies)
+                pb_sct_arr, _, _, _, ms_sct = run_pb_dose(tmp_sct, b, blx, energy, machine, machine_energies)
             except Exception as e:
                 row["dose_engine_failures"] += 1
                 print(f"\n  [PB ERROR sct] {e}"); continue
 
             depth = np.arange(len(d1)) * (dist / (len(d1) - 1))
-            d2, _ = ray_profile(pb_sct_arr, pb_sp, pb_org, rs, rt)
+            d2, _ = ray_profile(pb_sct_arr, pb_sp, pb_org, rs, rt, direction=pb_direction)
             pb_shift = find_r80(d2, depth) - find_r80(d1, depth)
 
             # --- 3) WEPL surrogate (timed) ---
             t0 = time.perf_counter()
-            w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000)
-            w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000)
+            w_ref = compute_wepl_along_ray(spr_ref, sp, org, rs, rt, num_samples=2000, direction=direction)
+            w_sct = compute_wepl_along_ray(spr_sct, sp, org, rs, rt, num_samples=2000, direction=direction)
             ms_sur = (time.perf_counter() - t0) * 1000
             pred_shift = -(w_sct - w_ref)[pk]
 

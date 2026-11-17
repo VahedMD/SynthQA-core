@@ -1,0 +1,14 @@
+# Frozen successful stratified cohort from the previously completed benchmark.
+# One patient ID per line. This avoids a full Hugging Face repository listing.
+1THB021
+1THB029
+1THB052
+1THB002
+1THB008
+1THB011
+1ABB078
+1ABB138
+1ABB006
+1ABB011
+1ABB020
+1ABB021

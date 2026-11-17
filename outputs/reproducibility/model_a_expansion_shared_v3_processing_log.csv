@@ -1,0 +1,47 @@
+Patient,CandidateOrder,Region,Metal,Status,Reason,candidate_rays_examined,candidate_beamlets_examined,rays_rejected_short_wepl,SelectedBeamIdx,SelectedRayIdx,SelectedBeamletIdx,SelectedEnergyMeV,SelectedDoseFile,SelectionRank,Runtime_ms
+1THB143,1,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB214,2,Thorax,True,included,,24,48,0,2,4,1,77.8749,proton/training/1THB214/dose/Dose_B2_R4_L1.mha,1,331.504800008
+1ABB030,3,Abdomen,False,included,,24,48,0,1,4,1,135.1458,proton/training/1ABB030/dose/Dose_B1_R4_L1.mha,1,125.959900004
+1THB217,4,Thorax,True,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB041,5,Abdomen,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB120,6,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB115,7,Abdomen,False,included,,24,48,0,2,5,0,75.1442,proton/training/1ABB115/dose/Dose_B2_R5_L0.mha,1,109.516700002
+1ABB098,8,Abdomen,False,included,,24,48,0,2,1,0,116.5273,proton/training/1ABB098/dose/Dose_B2_R1_L0.mha,1,136.096700007
+1ABB149,9,Abdomen,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB220,10,Thorax,False,included,,24,48,0,3,2,1,95.2605,proton/training/1THB220/dose/Dose_B3_R2_L1.mha,1,188.32880001
+1THB017,11,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB067,12,Abdomen,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB119,13,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB102,14,Abdomen,False,included,,24,48,0,2,2,1,83.1266,proton/training/1ABB102/dose/Dose_B2_R2_L1.mha,1,299.512500002
+1THB031,15,Thorax,True,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB037,16,Thorax,False,included,,24,48,0,0,1,0,127.9497,proton/training/1THB037/dose/Dose_B0_R1_L0.mha,1,438.854599997
+1ABB036,17,Abdomen,False,included,,24,48,0,2,2,1,108.4082,proton/training/1ABB036/dose/Dose_B2_R2_L1.mha,1,221.126700009
+1ABB118,18,Abdomen,False,included,,24,48,0,1,3,1,129.7775,proton/training/1ABB118/dose/Dose_B1_R3_L1.mha,1,194.005199999
+1THB205,19,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB061,20,Abdomen,False,included,,24,48,0,2,1,0,88.1344,proton/training/1ABB061/dose/Dose_B2_R1_L0.mha,1,148.671899995
+1ABB042,21,Abdomen,False,included,,24,48,0,1,0,0,88.1344,proton/training/1ABB042/dose/Dose_B1_R0_L0.mha,1,166.870799992
+1THB023,22,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB039,23,Abdomen,False,included,,24,48,0,1,1,1,90.5576,proton/training/1ABB039/dose/Dose_B1_R1_L1.mha,1,190.9381
+1THB078,24,Thorax,True,included,,24,48,0,2,3,0,114.5392,proton/training/1THB078/dose/Dose_B2_R3_L0.mha,1,234.8012
+1ABB124,25,Abdomen,False,included,,24,48,0,2,5,0,108.4082,proton/training/1ABB124/dose/Dose_B2_R5_L0.mha,1,109.771400006
+1THB195,26,Thorax,False,included,,24,48,0,1,2,1,97.5459,proton/training/1THB195/dose/Dose_B1_R2_L1.mha,1,294.534100001
+1THB045,27,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB202,28,Thorax,False,included,,24,48,0,1,5,1,129.7775,proton/training/1THB202/dose/Dose_B1_R5_L1.mha,1,200.06290001
+1THB063,29,Thorax,False,included,,24,48,0,2,4,1,99.7909,proton/training/1THB063/dose/Dose_B2_R4_L1.mha,1,153.533100005
+1THB218,30,Thorax,False,included,,24,48,0,0,2,0,148.7208,proton/training/1THB218/dose/Dose_B0_R2_L0.mha,1,227.885100001
+1ABB110,31,Abdomen,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,30,9,,,,,,,
+1THB058,32,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB161,33,Abdomen,False,included,,24,48,0,3,2,1,122.3412,proton/training/1ABB161/dose/Dose_B3_R2_L1.mha,1,89.4514999964
+1ABB155,34,Abdomen,False,included,,24,48,0,0,5,1,97.5459,proton/training/1ABB155/dose/Dose_B0_R5_L1.mha,1,175.050100006
+1ABB147,35,Abdomen,False,included,,24,48,0,0,5,1,129.7775,proton/training/1ABB147/dose/Dose_B0_R5_L1.mha,1,95.0708000018
+1THB076,36,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1ABB083,37,Abdomen,False,included,,24,48,0,1,2,1,127.9497,proton/training/1ABB083/dose/Dose_B1_R2_L1.mha,1,154.427799993
+1THB027,38,Thorax,False,no_valid_profile_top4,No valid dose profile among shared-v3 top candidates,24,48,0,,,,,,,
+1THB211,39,Thorax,False,included,,24,48,0,3,3,1,112.5242,proton/training/1THB211/dose/Dose_B3_R3_L1.mha,1,187.243500011
+1THB074,40,Thorax,False,included,,24,48,0,0,1,0,83.1266,proton/training/1THB074/dose/Dose_B0_R1_L0.mha,3,177.276799994
+1THB048,41,Thorax,False,included,,24,48,0,0,0,0,106.3045,proton/training/1THB048/dose/Dose_B0_R0_L0.mha,1,141.162199987
+1ABB169,42,Abdomen,False,included,,24,48,0,2,2,1,80.5337,proton/training/1ABB169/dose/Dose_B2_R2_L1.mha,1,98.6034000089
+1THB095,43,Thorax,False,included,,24,48,0,0,0,1,106.3045,proton/training/1THB095/dose/Dose_B0_R0_L1.mha,2,304.946699995
+1ABB031,44,Abdomen,False,included,,24,48,0,3,2,1,118.4897,proton/training/1ABB031/dose/Dose_B3_R2_L1.mha,1,109.362899995
+1ABB135,45,Abdomen,False,included,,24,48,0,0,2,0,120.4273,proton/training/1ABB135/dose/Dose_B0_R2_L0.mha,1,283.9141
+1ABB035,46,Abdomen,False,included,,24,48,0,2,3,1,90.5576,proton/training/1ABB035/dose/Dose_B2_R3_L1.mha,1,138.771600003

@@ -4,10 +4,36 @@
 
 - SimpleITK arrays are **NumPy (Z, Y, X)**; spacing/origin are **(X, Y, Z)**.
 - `axis` / `beam_axis`: `0 = Z (SI)`, `1 = Y (AP)`, `2 = X (LR)`.
-- **Sign convention:** ΔWEPL > 0 ⇒ proximal shift; predicted depth shift = −ΔWEPL(peak).
+- `origin_xyz` is the physical centre of voxel `(0,0,0)`; optional `direction`
+  is the SimpleITK direction-cosine matrix.
+- WEPL is integrated over exact voxel-intersection lengths (piecewise-constant
+  voxel SPR). Ray profile output positions are separate from integration resolution.
+- **Sign convention:** ΔWEPL > 0 ⇒ proximal shift. The first-order distal R80
+  prediction is −ΔWEPL(R80_ref) / SPR_ref(R80_ref); it is not evaluated at the
+  dose maximum.
 - DoseRAD2026 proton dose grid: 1 × 1 × 3 mm³ (anisotropic).
 
-*(io, calibration, surrogates, risk sections unchanged from v0.1.)*
+## `synthqa_core.surrogates.wepl`
+
+```python
+trace_ray_voxels(shape_zyx, spacing_xyz, origin_xyz, ray_source, ray_target,
+                 direction=None) -> dict
+    # Siddon-style voxel intersections; includes outside-image segments
+compute_wepl_along_ray(spr_array, spacing_xyz, origin_xyz, ray_source, ray_target,
+                       num_samples=None, direction=None, return_details=False)
+    # exact piecewise-constant voxel integration; num_samples only controls
+    # output locations along the ray, not integration accuracy
+compute_delta_wepl_along_ray(spr_ref, spr_sct, spacing_xyz, origin_xyz,
+                             ray_source, ray_target, direction=None,
+                             num_samples=None) -> dict
+    # paired ΔWEPL on one shared traversal; optional profile samples do not
+    # change the exact voxel-intersection integration
+sample_volume_along_ray(volume, spacing_xyz, origin_xyz, ray_source, ray_target,
+                        direction=None, order=1, cval=0.0, traversal=None)
+    # sample a scalar volume at ray-segment midpoints
+compute_wepl_along_axis(spr_array, spacing_xyz, axis) -> ndarray
+    # cumulative WEPL evaluated at voxel centres (half current-voxel contribution)
+```
 
 ---
 

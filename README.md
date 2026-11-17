@@ -15,6 +15,28 @@ radiotherapy (proton/hadron focus).
 > beamlet, predicts the spatial distribution of proton dose errors caused by sCT
 > inaccuracies, validated against Geant4 Monte Carlo and pencil-beam ground truth.
 
+### Stratified cohort composition (updated selection policy)
+
+The DoseRAD2026 dataset paper (Xiao et al., 2026; arXiv:2604.12778), Appendix C, lists 13 training cases with metal artifacts: 11 thoracic and 2 abdominal (1ABB078 and 1ABB138). An exactly balanced 3-per-stratum design is therefore not available. The feasible 12-patient target is 3 thorax-metal, 3 thorax-nonmetal, 2 abdomen-metal, and 4 abdomen-nonmetal. The Model A selector now continues to the next sorted candidate within a stratum when a candidate cannot provide a valid dose profile; for example, a failed thorax-metal candidate can be replaced by the next available thorax-metal case. A run must reach all four stratum targets before it is described as the planned n=12 cohort.
+
+
+## Numerical-integration update (voxel-wise WEPL)
+
+The arbitrary-ray WEPL implementation now uses Siddon-style ray–voxel
+intersections. SPR is treated as piecewise constant within each voxel, and
+each intersected segment contributes `SPR_i × segment_length_i`. The
+`num_samples` argument controls only where the cumulative WEPL profile is
+reported; it no longer determines integration accuracy. Principal-axis WEPL
+is evaluated at voxel centres and includes half of the current voxel.
+
+**Reproducibility notice:** numerical results and figures distributed with
+older package snapshots were generated with the previous point-sampled
+implementation. They must be regenerated with this voxel-wise implementation
+before being presented as final manuscript results. In particular, re-run
+the stratified benchmark, the 30-patient expansion analysis, the pyRadPlan
+head-to-head analysis, and all dependent reviewer statistics/figures. Do not
+assume the previously reported metrics remain unchanged.
+
 ## The method in one formula
 
 ```
@@ -37,7 +59,7 @@ MC dose D_ref ────────────────∂/∂z───�
 **Sign convention:** positive ΔWEPL (sCT overestimates SPR) ⇒ **proximal** range shift;
 predicted depth shift = −ΔWEPL evaluated at the Bragg peak.
 
-## Headline results (DoseRAD2026, Geant4 ground truth)
+## Previous benchmark results (pre voxel-wise integration; for traceability only)\n\nThe following values are retained from the earlier point-sampled implementation and are **not** the final results after the numerical-integration update. Regenerate them before manuscript submission.\n\n
 
 | Endpoint | n | Result |
 |---|---|---|
@@ -171,3 +193,22 @@ SynthRAD2025 and DoseRAD2026 datasets.
 Code: **MIT** (see [`LICENSE`](LICENSE)).
 Underlying datasets: **CC BY-NC 4.0** — derived validation results inherit their
 non-commercial terms.
+
+## Finite WEPL mapping and linearization diagnostics
+
+The stratified benchmark now reports both the local first-order R80 estimate and the finite WEPL-mapped R80 estimate, together with interval SPR and linearization diagnostics. See `docs/finite_wepl_mapping_and_linearization.md` for definitions and interpretation. The remapped-dose R80 is a numerical consistency check, not independent dose validation.
+
+For the frozen expansion cohort, run `python scripts/rebenchmark_expansion_dual_estimators.py`. It preserves the existing 30-patient order (including the 1THB121 exclusion / 1ABB143 replacement) and writes a new dual-estimator CSV without overwriting the historical output.
+
+
+### Frozen dual-estimator expansion rebenchmarking
+
+`python scripts/rebenchmark_expansion_dual_estimators.py` uses the existing frozen 30-patient expansion CSV and the locally frozen executed stratified cohort IDs. It does not enumerate the Hugging Face repository to rediscover patients. Disjointness is checked against the 12 stratified patients actually used and the fixed PB-comparison cohort. The broader fallback reservation pool remains in force only when selecting a new expansion cohort; unused fallback candidates do not retroactively invalidate an already frozen cohort. Individual plan, CT, and dose files still need to be downloadable from Hugging Face.
+
+## Stratified R80 reproducibility (shared-v3)
+
+The stratified benchmark and exact-case audit now share one R80 calculation
+module. See [docs/stratified_r80_reproducibility.md](docs/stratified_r80_reproducibility.md)
+for clean-start commands, generated files, and the exact audit PASS criteria.
+Run `python scripts/benchmark_dataset.py` before running
+`python scripts/audit_stratified_r80_case.py --patient <PATIENT_ID>`.

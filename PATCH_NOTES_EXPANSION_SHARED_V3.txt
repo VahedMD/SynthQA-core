@@ -1,0 +1,86 @@
+SynthQA_V2 - Expansion shared-v3 rebenchmark repair
+Date: 2026-11-13
+
+WHAT WAS FIXED
+
+1. Resume after an empty first checkpoint
+   - The initial smoke test correctly excluded 1THB143 after all four shared-v3
+     top-ranked dose profiles failed the existing dose-profile validity rule.
+   - With zero accepted cases, the old script wrote a newline-only results CSV.
+     pandas.read_csv then raised EmptyDataError on the next run.
+   - The revised script safely reads empty checkpoints and removes schema-less
+     empty CSVs rather than creating an invalid resume file.
+
+2. Correct cohort disjointness
+   - The old candidate-order builder reserved the nominal stratified candidates,
+     not the actual frozen 12-patient stratified cohort.
+   - This allowed 1THB052 to enter the expansion candidate order even though it
+     belongs to the executed stratified cohort.
+   - The revised script reads scripts/stratified_candidate_patient_ids.txt,
+     validates that it contains exactly 12 unique IDs, and excludes those IDs,
+     the fixed 11-patient PB comparison cohort, and the explicit 1THB121 hold-out.
+   - The existing seeded candidate order is retained in its original relative
+     order; only reserved IDs are removed and candidate ranks are compacted.
+   - The supplied candidate-order CSV has already been repaired. It now has
+     61 candidates, starts with 1THB143, and has no overlap with any reserved set.
+
+3. Safer checkpoint recovery
+   - Patients already present in the results checkpoint are treated as completed
+     even if a process stopped before writing the corresponding processing log.
+   - Shared-R80 evaluation failures are written to the processing log rather
+     than terminating the entire cohort run.
+   - Invalid dose-profile attempts now record peak index, peak dose, distal
+     minimum, and distal-minimum/peak ratio for diagnosis.
+   - Summary JSON generation handles non-finite values safely.
+
+WHAT WAS NOT CHANGED
+
+- Candidate preselection is still the exact _plan_candidate_records function
+  from scripts/benchmark_dataset.py.
+- The stable energy-mismatch ranking and top-four dose-file limit are unchanged.
+- Dose profile sampling and validity use the shared stratified_r80 functions.
+- Final calculations use evaluate_selected_beamlet from the shared-v3 module.
+- No estimator, WEPL integration, R80 definition, or physical assumption changed.
+- FiniteMap remains an analytical finite WEPL remapping of the reference dose
+  profile, not an independent perturbed-image MC/PB calculation.
+
+CURRENT CHECKPOINT STATE
+
+- 1THB143: terminal exclusion, no valid dose profile among the shared-v3 top 4.
+- Its four candidate attempts are retained in
+  outputs/reproducibility/model_a_expansion_shared_v3_candidate_log.csv.
+- Its exclusion is retained in
+  outputs/reproducibility/model_a_expansion_shared_v3_processing_log.csv.
+- No valid expansion cases have been included yet.
+- The next run skips 1THB143 and starts with the next candidate in the repaired
+  candidate order.
+
+HOW TO CONTINUE (PowerShell)
+
+From the project root:
+
+    .\\venv\\Scripts\\Activate.ps1
+    python -m compileall -q scripts src
+    python scripts/rebenchmark_expansion_shared_v3.py
+
+Run without --limit-patients to continue through the candidate list until 30
+valid cases have been collected. If the process is interrupted, run the same
+command again; it resumes from the saved candidate order and checkpoints.
+Do not delete the candidate-order, processing-log, or candidate-log files.
+
+After completion, audit any selected patient using the exact saved beamlet row:
+
+    python scripts/audit_stratified_r80_case.py --patient 1THB078 --benchmark-csv outputs/reproducibility/model_a_expansion_shared_v3_n30.csv --output-dir outputs/reproducibility/r80_expansion_shared_v3_audits
+
+Replace 1THB078 with a patient ID present in the completed expansion CSV.
+
+VALIDATION PERFORMED FOR THIS PATCH
+
+- Python compilation: passed.
+- Targeted project tests: 29 passed.
+- Empty-checkpoint, resume-state, reserved-cohort disjointness, and empty-summary
+  smoke checks: passed.
+- The complete end-to-end HF dataset run was not executed in this environment:
+  it has no SimpleITK installation or authenticated DoseRAD2026 download access.
+  The user's project requirements pin SimpleITK 2.5.6; the Windows run should
+  use the existing project virtual environment.
